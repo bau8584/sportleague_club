@@ -1,8 +1,8 @@
 import { getTier, TIER_STYLES, getFullTierLabel, type TierName } from "@/lib/league-types";
 import { cn } from "@/lib/utils";
 
-export function TierBadge({ rp, thresholds }: { rp: number; thresholds?: Record<TierName, number> }) {
-  const tier: TierName = getTier(rp, thresholds);
+export function TierBadge({ rp, thresholds, placementGamesPlayed }: { rp: number; thresholds?: Record<string, number>; placementGamesPlayed?: number }) {
+  const tier: TierName = getTier(rp, thresholds, placementGamesPlayed);
   const s = TIER_STYLES[tier];
   return (
     <span
@@ -12,7 +12,7 @@ export function TierBadge({ rp, thresholds }: { rp: number; thresholds?: Record<
       )}
     >
       <span className="size-1.5 rounded-full bg-current" />
-      {getFullTierLabel(rp, thresholds)}
+      {getFullTierLabel(rp, thresholds, placementGamesPlayed)}
     </span>
   );
 }

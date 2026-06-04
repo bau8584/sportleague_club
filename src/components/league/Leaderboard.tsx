@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
 import { getTier, TIER_ORDER, TIER_STYLES, type TierName, type Student } from "@/lib/league-types";
 
-const GRADES = [1, 2, 3, 4, 5, 6];
+const LEVELS = ["A", "B", "C", "D", "초심"];
 type GenderFilter = "all" | "M" | "F";
 
 function getWinStreak(recent: ("W" | "L")[]): number {
@@ -31,8 +31,7 @@ export function Leaderboard({
   thresholds?: Record<TierName, number>;
   teacherAccessCode: string;
 }) {
-  const [grade, setGrade] = useState<number | "all">("all");
-  const [classNum, setClassNum] = useState<number | "all">("all");
+  const [level, setLevel] = useState<string | "all">("all");
   const [tier, setTier] = useState<TierName | "all">("all");
   const [gender, setGender] = useState<GenderFilter>("all");
   const [query, setQuery] = useState("");
@@ -51,23 +50,17 @@ export function Leaderboard({
 
 
 
-  const availableClasses = useMemo(() => {
-    if (grade === "all") return [];
-    const set = new Set<number>();
-    students.filter((s) => s.grade === grade).forEach((s) => set.add(s.classNum));
-    return Array.from(set).sort((a, b) => a - b);
-  }, [students, grade]);
+
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return students
-      .filter((s) => (grade === "all" ? true : s.grade === grade))
-      .filter((s) => (classNum === "all" ? true : s.classNum === classNum))
-      .filter((s) => (tier === "all" ? true : getTier(s.rp, thresholds) === tier))
+      .filter((s) => (level === "all" ? true : s.level === level))
+      .filter((s) => (tier === "all" ? true : getTier(s.rp, thresholds, s.placementGamesPlayed) === tier))
       .filter((s) => (gender === "all" ? true : s.gender === gender))
       .filter((s) => (q ? s.name.toLowerCase().includes(q) : true))
       .sort((a, b) => b.rp - a.rp);
-  }, [students, grade, classNum, tier, gender, query, thresholds]);
+  }, [students, level, tier, gender, query, thresholds]);
 
   // 보안 잠금 가드 렌더링
   if (!isUnlocked && !isDemo) {
@@ -87,36 +80,22 @@ export function Leaderboard({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="학생 이름으로 검색..."
+            placeholder="선수 이름으로 검색..."
             className="h-10 border-border/60 bg-card/60 pl-9 text-sm"
           />
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">학년</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">급수 (레벨)</p>
           <div className="flex flex-wrap gap-2">
-            <FilterChip active={grade === "all"} onClick={() => { setGrade("all"); setClassNum("all"); }}>전체보기</FilterChip>
-            {GRADES.map((g) => (
-              <FilterChip key={g} active={grade === g} onClick={() => { setGrade(g); setClassNum("all"); }}>
-                {g}학년
+            <FilterChip active={level === "all"} onClick={() => setLevel("all")}>전체급수</FilterChip>
+            {LEVELS.map((l) => (
+              <FilterChip key={l} active={level === l} onClick={() => setLevel(l)}>
+                {l}급
               </FilterChip>
             ))}
           </div>
         </div>
-        {grade !== "all" && (
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">반</p>
-            <div className="flex flex-wrap gap-2">
-              <FilterChip active={classNum === "all"} onClick={() => setClassNum("all")}>전체반</FilterChip>
-              {availableClasses.map((c) => (
-                <FilterChip key={c} active={classNum === c} onClick={() => setClassNum(c)}>{c}반</FilterChip>
-              ))}
-              {availableClasses.length === 0 && (
-                <span className="text-sm text-muted-foreground">등록된 반이 없습니다</span>
-              )}
-            </div>
-          </div>
-        )}
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">티어</p>
           <div className="flex flex-wrap gap-2">
@@ -149,11 +128,11 @@ export function Leaderboard({
             <thead>
               <tr className="border-b border-border/60 bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-3 text-left">순위</th>
-                <th className="px-4 py-3 text-left">학년/반</th>
-                <th className="px-2 py-3 text-left">번호</th>
+                <th className="px-4 py-3 text-left">클럽</th>
+                <th className="px-2 py-3 text-left">급수</th>
                 <th className="px-4 py-3 text-left">이름</th>
                 <th className="px-4 py-3 text-left">티어</th>
-                <th className="px-4 py-3 text-right">RP</th>
+                <th className="px-4 py-3 text-right">RP (MMR)</th>
                 <th className="px-4 py-3 text-center">최근 5경기</th>
                 <th className="px-4 py-3 text-right">승률</th>
               </tr>
@@ -167,8 +146,8 @@ export function Leaderboard({
                     <td className="px-4 py-3 font-bold tabular-nums">
                       <RankBadge rank={i + 1} />
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{s.grade}-{s.classNum}</td>
-                    <td className="px-2 py-3 tabular-nums text-muted-foreground">{s.number}</td>
+                    <td className="px-4 py-3 text-muted-foreground truncate max-w-[120px]" title={s.clubName}>{s.clubName || "에이스"}</td>
+                    <td className="px-2 py-3 text-muted-foreground font-bold">{s.level}급</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 font-semibold">
                         <GenderMark gender={s.gender} />
@@ -183,8 +162,8 @@ export function Leaderboard({
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3"><TierBadge rp={s.rp} thresholds={thresholds} /></td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-neon-blue text-glow-blue">{s.rp}</td>
+                    <td className="px-4 py-3"><TierBadge rp={s.rp} thresholds={thresholds} placementGamesPlayed={s.placementGamesPlayed} /></td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-neon-blue text-glow-blue">{s.placementGamesPlayed < 5 ? `MMR ${s.hiddenMMR} (배치중)` : `${s.rp} RP`}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         {Array.from({ length: 5 }).map((_, idx) => {

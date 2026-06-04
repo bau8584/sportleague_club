@@ -9,18 +9,16 @@ import type { Student, Match } from "@/lib/league-types";
 import { getTier, getTierSubdivision, TIER_ORDER } from "@/lib/league-types";
 import { toast } from "sonner";
 
-const GRADES = [1, 2, 3, 4, 5, 6];
-const CLASSES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const LEVELS = ["A", "B", "C", "D", "초심"];
 
-type Selection = { grade: number | null; classNum: number | null; studentId: string | null };
-const empty: Selection = { grade: null, classNum: null, studentId: null };
+type Selection = { level: string | null; studentId: string | null };
+const empty: Selection = { level: null, studentId: null };
 
 type PlayerResult = {
   name: string;
-  grade: number;
-  classNum: number;
-  number: number;
-  gender: "M" | "F" | "U";
+  clubName: string;
+  level: string;
+  gender: "M" | "F";
   prevRp: number;
   prevTier: string;
   finalRp: number;
@@ -28,7 +26,6 @@ type PlayerResult = {
   promoted: boolean;
   score: number;
   rpDelta: number;
-  // Stored bonuses
   underdogBonus: number;
   scoreDiffBonus: number;
   rivalBonus: number;
@@ -94,8 +91,8 @@ export function RecordMatch({
       const studentB = students.find((s) => s.id === initials.playerBId);
       if (studentA && studentB) {
         setMatchType("single");
-        setA({ grade: studentA.grade, classNum: studentA.classNum, studentId: studentA.id });
-        setB({ grade: studentB.grade, classNum: studentB.classNum, studentId: studentB.id });
+        setA({ level: studentA.level, studentId: studentA.id });
+        setB({ level: studentB.level, studentId: studentB.id });
         setA2(empty);
         setB2(empty);
         setScoreA(0);
@@ -238,20 +235,19 @@ export function RecordMatch({
       }
 
       const finalRp = Math.max(0, prevRp + rpDelta);
-      const prevTier = getTier(prevRp, thresholds);
-      const finalTier = getTier(finalRp, thresholds);
+      const prevTier = getTier(prevRp, thresholds, student.placementGamesPlayed);
+      const finalTier = getTier(finalRp, thresholds, student.placementGamesPlayed + 1);
 
-      const prevSub = getTierSubdivision(prevRp, thresholds);
-      const finalSub = getTierSubdivision(finalRp, thresholds);
+      const prevSub = getTierSubdivision(prevRp, thresholds, student.placementGamesPlayed);
+      const finalSub = getTierSubdivision(finalRp, thresholds, student.placementGamesPlayed + 1);
       const basePromoted = TIER_ORDER.indexOf(finalTier) < TIER_ORDER.indexOf(prevTier);
       const subPromoted = finalTier === prevTier && finalSub < prevSub;
       const promoted = won && (basePromoted || subPromoted);
 
       return {
         name: student.name,
-        grade: student.grade,
-        classNum: student.classNum,
-        number: student.number,
+        clubName: student.clubName,
+        level: student.level,
         gender: student.gender,
         prevRp,
         prevTier,
@@ -286,10 +282,10 @@ export function RecordMatch({
     setShowModal(true);
 
     // 6. Reset name selectors and scores but retain grade & class selections
-    setA({ grade: a.grade, classNum: a.classNum, studentId: null });
-    setA2({ grade: a2.grade, classNum: a2.classNum, studentId: null });
-    setB({ grade: b.grade, classNum: b.classNum, studentId: null });
-    setB2({ grade: b2.grade, classNum: b2.classNum, studentId: null });
+    setA({ level: a.level, studentId: null });
+    setA2({ level: a2.level, studentId: null });
+    setB({ level: b.level, studentId: null });
+    setB2({ level: b2.level, studentId: null });
     setScoreA(0); 
     setScoreB(0);
   };
@@ -482,7 +478,7 @@ export function RecordMatch({
                           )}
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">
-                          {resultData.winner.grade}학년 {resultData.winner.classNum}반 · {resultData.winner.number}번
+                          {resultData.winner.clubName} · {resultData.winner.level}급
                         </div>
                       </div>
                     </div>
@@ -541,7 +537,7 @@ export function RecordMatch({
                             )}
                           </div>
                           <div className="text-[10px] text-muted-foreground mt-0.5">
-                            {resultData.winner2.grade}학년 {resultData.winner2.classNum}반 · {resultData.winner2.number}번
+                            {resultData.winner2.clubName} · {resultData.winner2.level}급
                           </div>
                         </div>
                       </div>
@@ -598,7 +594,7 @@ export function RecordMatch({
                           <span className="text-lg font-black">{resultData.loser.name}</span>
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">
-                          {resultData.loser.grade}학년 {resultData.loser.classNum}반 · {resultData.loser.number}번
+                          {resultData.loser.clubName} · {resultData.loser.level}급
                         </div>
                       </div>
                     </div>
@@ -642,7 +638,7 @@ export function RecordMatch({
                             <span className="text-lg font-black">{resultData.loser2.name}</span>
                           </div>
                           <div className="text-[10px] text-muted-foreground mt-0.5">
-                            {resultData.loser2.grade}학년 {resultData.loser2.classNum}반 · {resultData.loser2.number}번
+                            {resultData.loser2.clubName} · {resultData.loser2.level}급
                           </div>
                         </div>
                       </div>
@@ -777,20 +773,19 @@ function PlayerSelector({
     : "border-neon-green/60 bg-neon-green/15 text-neon-green shadow-[0_0_14px_oklch(0.85_0.22_150/0.35)]";
 
   const headerCls = accent === "blue" ? "text-neon-blue" : "text-neon-green";
-
-  const classes = useMemo(() => {
-    if (value.grade == null) return [];
-    const set = new Set<number>();
-    students.filter((s) => s.grade === value.grade).forEach((s) => set.add(s.classNum));
-    return Array.from(set).sort((a, b) => a - b);
-  }, [students, value.grade]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const roster = useMemo(() => {
-    if (value.grade == null || value.classNum == null) return [];
-    return students
-      .filter((s) => s.grade === value.grade && s.classNum === value.classNum)
-      .sort((a, b) => a.number - b.number);
-  }, [students, value.grade, value.classNum]);
+    let list = students;
+    if (value.level) {
+      list = list.filter((s) => s.level === value.level);
+    }
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      list = list.filter((s) => s.name.toLowerCase().includes(q));
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  }, [students, value.level, searchTerm]);
 
   return (
     <Card className="border-border/60 bg-card/60 p-5 backdrop-blur">
@@ -798,7 +793,7 @@ function PlayerSelector({
         <h3 className={cn("text-sm font-bold uppercase tracking-wider", headerCls)}>{label}</h3>
         {player && (
           <button
-            onClick={() => onChange({ grade: value.grade, classNum: value.classNum, studentId: null })}
+            onClick={() => onChange({ level: value.level, studentId: null })}
             className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
           >
             <X className="size-3" /> 선수 다시 선택
@@ -808,55 +803,61 @@ function PlayerSelector({
 
       {player ? (
         <div className={cn("rounded-lg border p-4", accentCls)}>
-          <div className="text-xs opacity-80">{player.grade}학년 {player.classNum}반 · {player.number}번</div>
+          <div className="text-xs opacity-80">{player.clubName} · {player.level}급 · {player.gender === "M" ? "남성" : "여성"}</div>
           <div className="mt-1 flex items-center gap-2 text-2xl font-black">
             <GenderMark gender={player.gender} className="size-5 text-xs" />
             {player.name}
+            {player.placementGamesPlayed < 5 && (
+              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-normal">
+                배치 중 ({player.placementGamesPlayed}/5)
+              </span>
+            )}
           </div>
-          <div className="mt-2 flex items-center gap-2"><TierBadge rp={player.rp} /><span className="font-mono text-xs opacity-80">{player.rp} RP</span></div>
+          <div className="mt-2 flex items-center gap-2">
+            <TierBadge rp={player.rp} placementGamesPlayed={player.placementGamesPlayed} />
+            <span className="font-mono text-xs opacity-80">
+              {player.placementGamesPlayed < 5 ? `MMR ${player.hiddenMMR}` : `${player.rp} RP`}
+            </span>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
-          <Step n={1} title="학년">
-            <div className="flex flex-wrap gap-3 mt-2">
-              {GRADES.map((g) => (
-                <Chip key={g} active={value.grade === g} accent={accent} onClick={() => onChange({ grade: g, classNum: null, studentId: null })}>
-                  {g}학년
+          <div className="space-y-1.5">
+            <input
+              type="text"
+              placeholder="이름으로 검색..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-8 px-2 border border-border/60 bg-background/40 hover:bg-background/60 focus:bg-background/80 transition-all rounded-md text-xs"
+            />
+          </div>
+          <Step n={1} title="급수 필터">
+            <div className="flex flex-wrap gap-2 mt-2">
+              {LEVELS.map((lvl) => (
+                <Chip key={lvl} active={value.level === lvl} accent={accent} onClick={() => onChange({ level: value.level === lvl ? null : lvl, studentId: null })}>
+                  {lvl}급
                 </Chip>
               ))}
             </div>
           </Step>
-          {value.grade != null && (
-            <Step n={2} title="반">
-              <div className="flex flex-wrap gap-3 mt-2">
-                {CLASSES.filter((c) => classes.includes(c)).map((c) => (
-                  <Chip key={c} active={value.classNum === c} accent={accent} onClick={() => onChange({ ...value, classNum: c, studentId: null })}>
-                    {c}반
-                  </Chip>
-                ))}
-                {classes.length === 0 && <span className="text-xs text-muted-foreground block py-2">학생이 없습니다</span>}
-              </div>
-            </Step>
-          )}
-          {value.classNum != null && (
-            <Step n={3} title="선수 선택">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {roster.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => onChange({ ...value, studentId: s.id })}
-                    className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-left transition-all hover:border-neon-blue/60 hover:bg-accent/50"
-                  >
-                    <div className="text-[10px] text-muted-foreground">{s.number}번</div>
-                    <div className="flex items-center gap-1.5 text-sm font-bold">
-                      <GenderMark gender={s.gender} />
-                      {s.name}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </Step>
-          )}
+          <Step n={2} title="선수 선택">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 max-h-[180px] overflow-y-auto pr-1">
+              {roster.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => onChange({ ...value, studentId: s.id })}
+                  className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5 text-left transition-all hover:border-neon-blue/60 hover:bg-accent/50"
+                >
+                  <div className="text-[9px] text-muted-foreground">{s.level}급 · {s.gender === "M" ? "남" : "여"}</div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold">
+                    <GenderMark gender={s.gender} />
+                    {s.name}
+                  </div>
+                </button>
+              ))}
+              {roster.length === 0 && <span className="text-[11px] text-muted-foreground block py-2 col-span-2 text-center">선수가 없습니다</span>}
+            </div>
+          </Step>
         </div>
       )}
     </Card>
@@ -883,7 +884,7 @@ function Chip({ active, accent, onClick, children }: { active: boolean; accent: 
       type="button"
       onClick={onClick}
       className={cn(
-        "w-20 h-16 rounded-2xl border text-base font-black transition-all active:scale-95 flex items-center justify-center shadow-md",
+        "px-3.5 h-10 rounded-xl border text-xs font-bold transition-all active:scale-95 flex items-center justify-center shadow-md",
         active ? activeCls : "border-border/60 bg-card/40 text-muted-foreground hover:text-foreground hover:bg-muted/30",
       )}
     >

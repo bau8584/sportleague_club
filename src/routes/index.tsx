@@ -11,15 +11,15 @@ import { MyRecord } from "@/components/league/MyRecord";
 import { Toaster } from "@/components/ui/sonner";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Crown, Swords, Trophy, Users, Pencil, Target, LogOut, School, ShieldAlert, Award } from "lucide-react";
+import { Crown, Swords, Trophy, Users, Pencil, Target, LogOut, Building2, ShieldAlert, Award } from "lucide-react";
 import { MyAchievements } from "@/components/league/MyAchievements";
 import { PromotionCelebration } from "@/components/league/PromotionCelebration";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "초등 스포츠 리그 · 티어 시스템" },
-      { name: "description", content: "전국 초등학교 체육 수업과 반 대항전을 위한 스포츠 리그 & 티어 랭킹 시스템." },
+      { title: "배드민턴 클럽 리그 · 티어 시스템" },
+      { name: "description", content: "동호인 배드민턴 클럽을 위한 스포츠 리그 & 티어 랭킹 시스템." },
     ],
   }),
   component: Index,
@@ -73,10 +73,7 @@ function Index() {
   const [recommendInitials, setRecommendInitials] = useState<{ playerAId: string; playerBId: string } | null>(null);
 
   // Persistent Match Recommendation States (Elevated for Session Preservation)
-  const [recommendSel, setRecommendSel] = useState<{ grade: number | null; classNum: number | null; studentId: string | null }>({ grade: null, classNum: null, studentId: null });
-  const [recommendMode, setRecommendMode] = useState<"class" | "otherClass" | "otherGrade">("class");
-  const [recommendTargetGrade, setRecommendTargetGrade] = useState<number | null>(null);
-  const [recommendTargetClass, setRecommendTargetClass] = useState<number | null>(null);
+  const [recommendSel, setRecommendSel] = useState<{ level: string | null; studentId: string | null }>({ level: null, studentId: null });
 
   // Role-based default tab redirect on session login
   useEffect(() => {
@@ -115,8 +112,7 @@ function Index() {
       const student = students.find((s) => s.id === session.studentId);
       if (student) {
         setRecommendSel({
-          grade: student.grade,
-          classNum: student.classNum,
+          level: student.level,
           studentId: student.id
         });
       }
@@ -214,13 +210,13 @@ function Index() {
                   </>
                 ) : session.role === "TEACHER" ? (
                   <>
-                    <School className="size-3.5" />
-                    <span>🏫 {session.schoolName} · {session.userName} 교사</span>
+                    <Building2 className="size-3.5" />
+                    <span>🏫 {session.schoolName} · {session.userName} 관리자</span>
                   </>
                 ) : (
                   <>
                     <Users className="size-3.5" />
-                    <span>🏆 {session.schoolName} · {session.userName} 학생</span>
+                    <span>🏆 {session.schoolName} · {session.userName} 회원</span>
                   </>
                 )}
               </div>
@@ -368,12 +364,6 @@ function Index() {
                 onSelectRecommendedMatch={handleSelectRecommendedMatch}
                 sel={recommendSel}
                 onSelChange={setRecommendSel}
-                mode={recommendMode}
-                onModeChange={setRecommendMode}
-                targetGrade={recommendTargetGrade}
-                onTargetGradeChange={setRecommendTargetGrade}
-                targetClass={recommendTargetClass}
-                onTargetClassChange={setRecommendTargetClass}
                 thresholds={tierThresholds}
                 onUpdateGender={updateStudentGender}
                 isStudentView={session?.role === "STUDENT"}

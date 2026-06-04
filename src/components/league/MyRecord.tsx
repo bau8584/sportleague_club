@@ -37,7 +37,7 @@ interface MyRecordProps {
   } | null;
   students: Student[];
   matches: Match[];
-  thresholds?: Record<TierName, number>;
+  thresholds?: Record<string, number>;
   rpVariables?: { winDelta: number; loseDelta: number };
 }
 
@@ -84,7 +84,23 @@ export function MyRecord({
     if (!me) return null;
     const t = thresholds || { Bronze: 0, Silver: 1000, Gold: 1200, Platinum: 1400, Diamond: 1600 };
     const currentRp = me.rp;
-    const currentTier = getTier(currentRp, thresholds);
+    const isPlacement = me.placementGamesPlayed < 5;
+    
+    if (isPlacement) {
+      const remainingGames = 5 - me.placementGamesPlayed;
+      const percent = Math.min(100, Math.round((me.placementGamesPlayed / 5) * 100));
+      return {
+        currentTier: "Unranked" as TierName,
+        nextTier: "Bronze" as TierName,
+        nextTierLabel: "브론즈",
+        remainingRp: remainingGames, // Used for remaining games instead
+        percent,
+        nextThreshold: 5,
+        isPlacement: true
+      };
+    }
+
+    const currentTier = getTier(currentRp, thresholds, me.placementGamesPlayed);
     
     let nextTier: TierName | null = null;
     let nextTierLabel = "";
@@ -112,11 +128,10 @@ export function MyRecord({
       currentThreshold = t.Platinum ?? 1400;
       nextThreshold = t.Diamond ?? 1600;
     } else {
-      // 다이아몬드
       nextTier = null;
       nextTierLabel = "마스터";
       currentThreshold = t.Diamond ?? 1600;
-      nextThreshold = currentThreshold + 400; // 다이아 상한 가상 설정
+      nextThreshold = currentThreshold + 400;
     }
 
     const range = nextThreshold - currentThreshold;
@@ -130,7 +145,8 @@ export function MyRecord({
       nextTierLabel,
       remainingRp,
       percent,
-      nextThreshold
+      nextThreshold,
+      isPlacement: false
     };
   }, [me, thresholds]);
 
@@ -159,9 +175,9 @@ export function MyRecord({
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center border border-dashed border-border rounded-2xl bg-card/25 backdrop-blur-md">
         <Activity className="size-12 text-muted-foreground animate-pulse mb-3" />
-        <h3 className="text-lg font-bold text-foreground">학생 데이터를 불러올 수 없습니다</h3>
+        <h3 className="text-lg font-bold text-foreground">선수 데이터를 불러올 수 없습니다</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          현재 로그인 세션에 일치하는 학생 정보가 명렬표에 없거나 로딩 중입니다. 교사에게 문의하세요.
+          현재 로그인 세션에 일치하는 선수 정보가 클럽 명단에 없거나 로딩 중입니다. 관리자에게 문의하세요.
         </p>
       </div>
     );
@@ -186,7 +202,7 @@ export function MyRecord({
           <CardHeader className="pb-3 relative z-10">
             <div className="flex items-center justify-between gap-3">
               <div className="space-y-0.5">
-                <span className="text-[10px] font-black uppercase tracking-wider text-neon-blue">Student Profile</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-neon-blue">Player Profile</span>
                 <CardTitle className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
                   <GenderMark gender={me.gender} />
                   <span>{me.name}</span>
@@ -194,19 +210,25 @@ export function MyRecord({
               </div>
               
               <div className="flex items-center gap-2">
-                {/* 🛡️ 강등 보호막 카운터 HUD */}
-                {me.rp >= (thresholds?.Silver ?? 1000) && (
-                  <div className={cn(
-                    "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold shadow-md transition-all shrink-0",
-                    (me.demotionShields ?? 0) > 0 
-                      ? "border-amber-500/40 bg-amber-500/10 text-amber-500 animate-pulse"
-                      : "border-border bg-card/60 text-muted-foreground"
-                  )}>
-                    <span>🛡️ x{me.demotionShields ?? 0}</span>
-                    <span className="text-[9px] font-black uppercase tracking-wider hidden sm:inline">강등 보호막</span>
+                {/* 🛡️ 강등 보호막 / 배치고사 HUD */}
+                {me.placementGamesPlayed < 5 ? (
+                  <div className="flex items-center gap-1 rounded-full border border-neon-blue/40 bg-neon-blue/5 text-neon-blue px-2.5 py-1 text-xs font-bold shadow-md shrink-0 animate-pulse">
+                    <span>⚡ 배치고사 진행 중 ({me.placementGamesPlayed}/5)</span>
                   </div>
+                ) : (
+                  me.rp >= (thresholds?.Silver ?? 1000) && (
+                    <div className={cn(
+                      "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold shadow-md transition-all shrink-0",
+                      (me.demotionShields ?? 0) > 0 
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-500 animate-pulse"
+                        : "border-border bg-card/60 text-muted-foreground"
+                    )}>
+                      <span>🛡️ x{me.demotionShields ?? 0}</span>
+                      <span className="text-[9px] font-black uppercase tracking-wider hidden sm:inline">강등 보호막</span>
+                    </div>
+                  )
                 )}
-                <TierBadge rp={me.rp} thresholds={thresholds} />
+                <TierBadge rp={me.rp} thresholds={thresholds} placementGamesPlayed={me.placementGamesPlayed} />
               </div>
             </div>
           </CardHeader>
@@ -214,8 +236,8 @@ export function MyRecord({
           <CardContent className="space-y-5 relative z-10 pt-1">
             {/* RP Stats */}
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-extrabold tracking-tight text-foreground">{me.rp}</span>
-              <span className="text-xs font-black uppercase tracking-wider text-neon-blue">RP 점수</span>
+              <span className="text-4xl font-extrabold tracking-tight text-foreground">{me.placementGamesPlayed < 5 ? `MMR ${me.hiddenMMR}` : `${me.rp}`}</span>
+              <span className="text-xs font-black uppercase tracking-wider text-neon-blue">{me.placementGamesPlayed < 5 ? "임시 MMR" : "RP 점수"}</span>
             </div>
 
             {/* 휴면 경고 안내 바 */}
@@ -254,7 +276,9 @@ export function MyRecord({
                   티어 진척도
                 </span>
                 <span>
-                  {tierProgress.nextTier ? (
+                  {tierProgress.isPlacement ? (
+                    <>초기 배치 완료까지 <span className="text-neon-blue font-extrabold">{tierProgress.remainingRp}경기</span> 남음</>
+                  ) : tierProgress.nextTier ? (
                     <>다음 등급인 <span className="text-neon-blue font-extrabold">[{tierProgress.nextTierLabel}]</span>까지 {tierProgress.remainingRp} RP 필요</>
                   ) : (
                     <span className="text-glow-gold text-gold flex items-center gap-1"><Medal className="size-3.5" /> 최고 티어 달성!</span>
@@ -278,9 +302,9 @@ export function MyRecord({
               </div>
               
               <div className="flex justify-between text-[10px] font-bold text-muted-foreground/80 px-1">
-                <span>{getFullTierLabel(me.rp, thresholds)}</span>
+                <span>{getFullTierLabel(me.rp, thresholds, me.placementGamesPlayed)}</span>
                 <span>{tierProgress.percent}%</span>
-                <span>{tierProgress.nextTier ? `${tierProgress.nextTierLabel} (${tierProgress.nextThreshold} RP)` : "MAX"}</span>
+                <span>{tierProgress.isPlacement ? "배치 완료 (5경기)" : (tierProgress.nextTier ? `${tierProgress.nextTierLabel} (${tierProgress.nextThreshold} RP)` : "MAX")}</span>
               </div>
             </div>
           </CardContent>
@@ -364,7 +388,7 @@ export function MyRecord({
             <div className="text-center py-16 px-4">
               <Calendar className="size-10 text-muted-foreground/60 mx-auto mb-3" />
               <p className="text-sm font-semibold text-muted-foreground">아직 참여한 경기 기록이 없습니다.</p>
-              <p className="text-xs text-muted-foreground/80 mt-1">교사가 매치 결과를 등록하면 여기에 실시간으로 전적이 나열됩니다!</p>
+              <p className="text-xs text-muted-foreground/80 mt-1">관리자가 매치 결과를 등록하면 여기에 실시간으로 전적이 나열됩니다!</p>
             </div>
           ) : (
             <div className="divide-y divide-border/30">
@@ -377,8 +401,8 @@ export function MyRecord({
                   ? [m.playerBId, m.playerB2Id].filter(Boolean) as string[]
                   : [m.playerAId, m.playerA2Id].filter(Boolean) as string[];
                 const oppPlayers = oppIds.map(id => students.find((s) => s.id === id)).filter(Boolean);
-                const oppName = oppPlayers.map(o => o.name).join(" & ") || "탈퇴한 학생";
-                const oppClass = oppPlayers[0] ? `${oppPlayers[0].grade}학년 ${oppPlayers[0].classNum}반` : "기타 소속";
+                const oppName = oppPlayers.map(o => o.name).join(" & ") || "탈퇴한 선수";
+                const oppClass = oppPlayers[0] ? `${oppPlayers[0].clubName} · ${oppPlayers[0].level}급` : "기타 소속";
                 
                 // 내 파트너 검색 (복식일 경우)
                 const partnerId = isTeamA 

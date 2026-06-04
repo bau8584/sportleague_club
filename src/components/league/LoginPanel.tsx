@@ -31,8 +31,7 @@ export function LoginPanel({
     schoolName: string, 
     accessCodeOrName: string, 
     role: Role, 
-    studentGrade?: number, 
-    studentClass?: number
+    authCode?: string
   ) => Promise<{ success: boolean; message?: string }>;
   onRegister: (details: {
     loginId: string;
@@ -54,8 +53,6 @@ export function LoginPanel({
   const [schoolName, setSchoolName] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [studentName, setStudentName] = useState("");
-  const [studentGrade, setStudentGrade] = useState("");
-  const [studentClass, setStudentClass] = useState("");
 
   // Master Login Inputs
   const [masterId, setMasterId] = useState("");
@@ -76,7 +73,7 @@ export function LoginPanel({
 
   const handleRecoverSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recoverSchoolName.trim()) return toast.error("학교 이름을 입력해 주세요.");
+    if (!recoverSchoolName.trim()) return toast.error("클럽 이름을 입력해 주세요.");
     if (!recoverEmail.trim()) return toast.error("이메일 주소를 입력해 주세요.");
 
     toast.loading("비밀번호 자가 복구 요청 중...", { id: "recover-loading" });
@@ -112,8 +109,8 @@ export function LoginPanel({
 
     // 2. TEACHER REGISTER FLOW
     if (isRegisterMode && activeTab === "TEACHER") {
-      if (!regSchoolName.trim()) return toast.error("등록할 학교 이름을 입력해 주세요.");
-      if (!regUserName.trim()) return toast.error("교사 이름을 입력해 주세요.");
+      if (!regSchoolName.trim()) return toast.error("등록할 클럽 이름을 입력해 주세요.");
+      if (!regUserName.trim()) return toast.error("관리자 이름을 입력해 주세요.");
       if (!regAccessCode.trim()) return toast.error("접속 시 사용할 4~10자리 인증코드를 지정해 주세요.");
       if (regAccessCode !== regAccessCodeConfirm) return toast.error("지정한 두 인증코드가 일치하지 않습니다.");
       if (!regEmail.trim()) return toast.error("비밀번호 분실 시 수신할 이메일 주소를 입력해 주세요.");
@@ -131,7 +128,7 @@ export function LoginPanel({
       toast.dismiss("reg-loading");
 
       if (res.success) {
-        toast.success(`🏫 ${regSchoolName} 리그 계정 등록 성공! 설정한 인증코드로 즉시 로그인해 보세요.`);
+        toast.success(`🏫 ${regSchoolName} 클럽 리그 계정 등록 성공! 설정한 인증코드로 즉시 로그인해 보세요.`);
         setSchoolName(regSchoolName.trim());
         setAccessCode(regAccessCode.trim());
         setIsRegisterMode(false);
@@ -142,47 +139,43 @@ export function LoginPanel({
         setRegScriptUrl("");
         setRegEmail("");
       } else {
-        toast.error(res.message || "등록 중 오류가 발생했습니다. 이미 등록된 학교 이름이거나 서버 상태를 확인해 주세요.");
+        toast.error(res.message || "등록 중 오류가 발생했습니다. 이미 등록된 클럽 이름이거나 서버 상태를 확인해 주세요.");
       }
       return;
     }
 
     // 3. STANDARD LOGIN FLOW
     if (!schoolName.trim()) {
-      return toast.error("학교 이름을 입력해 주세요.");
+      return toast.error("클럽 이름을 입력해 주세요.");
     }
 
     if (activeTab === "TEACHER") {
       if (!accessCode.trim()) {
-        return toast.error("교사 인증코드를 입력해 주세요.");
+        return toast.error("관리자 인증코드를 입력해 주세요.");
       }
       const res = await onLogin(schoolName.trim(), accessCode.trim(), "TEACHER");
       if (res.success) {
-        toast.success(`${schoolName} 교사 권한으로 접속했습니다!`);
+        toast.success(`${schoolName} 관리자 권한으로 접속했습니다!`);
       } else {
         toast.error(res.message || "인증코드가 일치하지 않습니다.");
       }
     } else {
-      if (!studentGrade) {
-        return toast.error("학년을 입력해 주세요.");
-      }
-      if (!studentClass) {
-        return toast.error("반을 입력해 주세요.");
+      if (!accessCode.trim()) {
+        return toast.error("본인 확인용 핀코드를 입력해 주세요.");
       }
       if (!studentName.trim()) {
-        return toast.error("학생 본인의 이름을 입력해 주세요.");
+        return toast.error("선수 본인의 이름을 입력해 주세요.");
       }
       const res = await onLogin(
         schoolName.trim(), 
         studentName.trim(), 
         "STUDENT", 
-        parseInt(studentGrade), 
-        parseInt(studentClass)
+        accessCode.trim()
       );
       if (res.success) {
-        toast.success(`${schoolName} ${studentGrade}학년 ${studentClass}반 ${studentName} 학생 권한으로 접속했습니다!`);
+        toast.success(`${schoolName} ${studentName} 선수 권한으로 접속했습니다!`);
       } else {
-        toast.error(res.message || "해당 학교 명단에 등록되지 않은 학생입니다. 학년, 반, 이름을 다시 확인하세요.");
+        toast.error(res.message || "해당 클럽 명단에 등록되지 않은 선수이거나 핀코드가 올바르지 않습니다.");
       }
     }
   };
@@ -192,7 +185,7 @@ export function LoginPanel({
     const res = await onLogin("꿈나무 초등학교", "1234", "TEACHER");
     toast.dismiss("guest-loading");
     if (res.success) {
-      toast.success("🎮 게스트 교사 권한으로 체험을 시작합니다. 모든 기능을 마음껏 테스트해보세요!");
+      toast.success("🎮 게스트 관리자 권한으로 체험을 시작합니다. 모든 기능을 마음껏 테스트해보세요!");
     } else {
       toast.error("데모 로그인 실패");
     }
@@ -221,12 +214,12 @@ export function LoginPanel({
               <Swords className="size-6 text-primary-foreground" />
             )}
           </div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-neon-blue">Elementary Sports League</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-neon-blue">Club Sports League</p>
           <h2 className="text-xl md:text-2xl font-black tracking-tight mt-1 text-foreground">
             {isMasterMode 
               ? "👑 최고 관리자 제어 포털" 
               : isRegisterMode 
-                ? "🏫 리그전 신규 학교/교사 등록" 
+                ? "🏫 리그전 신규 클럽/관리자 등록" 
                 : "스포츠 리그전 인증 포털"
             }
           </h2>
@@ -234,13 +227,13 @@ export function LoginPanel({
             {isMasterMode 
               ? "시스템 총괄 마스터 관리자 인증 정보를 입력하세요." 
               : isRegisterMode 
-                ? "새로운 학교 리그를 창설하고 고유 인증코드를 지정하세요." 
-                : "학교명과 정보를 입력하고 실시간 스포츠 리그전 시스템에 접속하세요."
+                ? "새로운 클럽 리그를 창설하고 고유 인증코드를 지정하세요." 
+                : "클럽 이름과 정보를 입력하고 실시간 스포츠 리그전 시스템에 접속하세요."
             }
           </p>
         </div>
 
-        {/* 1. 교사/학생 접속 탭 분리 (마스터 모드가 아닐 때만 렌더링) */}
+        {/* 1. 교사/선수 접속 탭 분리 (마스터 모드가 아닐 때만 렌더링) */}
         {!isMasterMode && !isRegisterMode && (
           <div className="grid grid-cols-2 gap-2 bg-background/50 border border-border/40 p-1.5 rounded-xl mb-6 relative z-10">
             <button
@@ -253,7 +246,7 @@ export function LoginPanel({
                   : "text-muted-foreground hover:text-foreground hover:bg-background/40"
               )}
             >
-              <Users className="size-3.5" /> 학생 접속
+              <Users className="size-3.5" /> 선수 접속
             </button>
             <button
               type="button"
@@ -265,7 +258,7 @@ export function LoginPanel({
                   : "text-muted-foreground hover:text-foreground hover:bg-background/40"
               )}
             >
-              <Building2 className="size-3.5" /> 교사 접속
+              <Building2 className="size-3.5" /> 관리자 접속
             </button>
           </div>
         )}
@@ -305,7 +298,7 @@ export function LoginPanel({
               {/* Register School Name */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1">
-                  <Building2 className="size-3.5 text-neon-blue" /> 학교 이름
+                  <Building2 className="size-3.5 text-neon-blue" /> 클럽 이름
                 </Label>
                 <Input
                   required
@@ -325,7 +318,7 @@ export function LoginPanel({
                   required
                   value={regUserName}
                   onChange={(e) => setRegUserName(e.target.value)}
-                  placeholder="선생님 성함 입력 (예: 홍길동)"
+                  placeholder="관리자 성함 입력 (예: 홍길동)"
                   className="h-10 border-border/60 bg-background/40 focus:border-neon-blue transition-all"
                 />
               </div>
@@ -400,7 +393,7 @@ export function LoginPanel({
                   onClick={() => setIsRegisterMode(false)}
                   className="text-xs font-bold text-neon-blue hover:underline flex items-center gap-1 ml-auto"
                 >
-                  <ArrowLeft className="size-3.5" /> 이미 학교 계정이 있나요? 로그인하기
+                  <ArrowLeft className="size-3.5" /> 이미 클럽 계정이 있나요? 로그인하기
                 </button>
               </div>
             </div>
@@ -410,12 +403,12 @@ export function LoginPanel({
             <div className="space-y-4 animate-in fade-in duration-300">
               {/* School Name Input */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-foreground">학교 이름</Label>
+                <Label className="text-xs font-bold text-foreground">클럽 이름</Label>
                 <Input
                   required
                   value={schoolName}
                   onChange={(e) => setSchoolName(e.target.value)}
-                  placeholder="학교 이름을 입력하세요 (예: 대한초 또는 대한초등학교)"
+                  placeholder="클럽 이름을 입력하세요 (예: 대한초 또는 대한초등학교)"
                   className="h-10 border-border/60 bg-background/40 hover:border-neon-blue/60 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all"
                 />
               </div>
@@ -424,14 +417,14 @@ export function LoginPanel({
                 /* TEACHER LOGIN FIELDS */
                 <div className="space-y-1.5 animate-in fade-in duration-200">
                   <div className="flex justify-between items-center">
-                    <Label className="text-xs font-bold text-foreground">교사 인증코드</Label>
+                    <Label className="text-xs font-bold text-foreground">관리자 인증코드</Label>
                   </div>
                   <Input
                     required
                     type="password"
                     value={accessCode}
                     onChange={(e) => setAccessCode(e.target.value)}
-                    placeholder="교사 인증코드 4자리를 입력하세요"
+                    placeholder="관리자 인증코드 4자리를 입력하세요"
                     className="h-10 border-border/60 bg-background/40 hover:border-neon-blue/60 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all"
                   />
                   
@@ -456,42 +449,25 @@ export function LoginPanel({
               ) : (
                 /* STUDENT LOGIN FIELDS */
                 <div className="space-y-3.5 animate-in fade-in duration-200">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-foreground">학년</Label>
-                      <Input
-                        required
-                        type="number"
-                        min={1}
-                        max={6}
-                        value={studentGrade}
-                        onChange={(e) => setStudentGrade(e.target.value)}
-                        placeholder="학년 (1~6)"
-                        className="h-10 border-border/60 bg-background/40 focus:border-neon-blue transition-all font-sans"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-foreground">반</Label>
-                      <Input
-                        required
-                        type="number"
-                        min={1}
-                        max={20}
-                        value={studentClass}
-                        onChange={(e) => setStudentClass(e.target.value)}
-                        placeholder="반 (1~20)"
-                        className="h-10 border-border/60 bg-background/40 focus:border-neon-blue transition-all font-sans"
-                      />
-                    </div>
-                  </div>
-
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-foreground">본인 이름</Label>
+                    <Label className="text-xs font-bold text-foreground">선수 이름</Label>
                     <Input
                       required
                       value={studentName}
                       onChange={(e) => setStudentName(e.target.value)}
-                      placeholder="명렬표에 등록된 본인 실명을 입력하세요"
+                      placeholder="클럽에 등록된 본인 실명을 입력하세요"
+                      className="h-10 border-border/60 bg-background/40 hover:border-neon-blue/60 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-foreground">본인 확인용 핀코드 (PIN)</Label>
+                    <Input
+                      required
+                      type="password"
+                      value={accessCode}
+                      onChange={(e) => setAccessCode(e.target.value)}
+                      placeholder="핀코드 4자리를 입력하세요"
                       className="h-10 border-border/60 bg-background/40 hover:border-neon-blue/60 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all"
                     />
                   </div>
@@ -526,11 +502,11 @@ export function LoginPanel({
               </span>
             ) : activeTab === "TEACHER" ? (
               <span className="flex items-center gap-1.5">
-                <Key className="size-4" /> 교사 전용 리그 접속
+                <Key className="size-4" /> 관리자 전용 리그 접속
               </span>
             ) : (
               <span className="flex items-center gap-1.5">
-                <Users className="size-4" /> 학생 전용 리그 접속
+                <Users className="size-4" /> 선수 전용 리그 접속
               </span>
             )}
           </Button>
@@ -566,7 +542,7 @@ export function LoginPanel({
           >
             {isMasterMode ? (
               <span className="flex items-center gap-1">
-                🏫 일반 교사/학생 로그인으로 돌아가기
+                🏫 일반 관리자/선수 로그인으로 돌아가기
               </span>
             ) : (
               <span className="flex items-center gap-1 justify-center">
@@ -583,15 +559,15 @@ export function LoginPanel({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
           <Card className="w-full max-w-md border-border/60 bg-card/95 p-6 rounded-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="text-center mb-6">
-              <h3 className="text-lg font-black text-foreground">🔑 교사 비밀번호 분실 자가 복구</h3>
+              <h3 className="text-lg font-black text-foreground">🔑 관리자 비밀번호 분실 자가 복구</h3>
               <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                가입 시 입력했던 학교명과 이메일 주소가 일치하는 경우, 등록된 이메일로 현재 설정된 교사 인증코드를 자동 전송합니다.
+                가입 시 입력했던 학교명과 이메일 주소가 일치하는 경우, 등록된 이메일로 현재 설정된 관리자 인증코드를 자동 전송합니다.
               </p>
             </div>
 
             <form onSubmit={handleRecoverSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-foreground">학교 이름</Label>
+                <Label className="text-xs font-bold text-foreground">클럽 이름</Label>
                 <Input
                   required
                   value={recoverSchoolName}

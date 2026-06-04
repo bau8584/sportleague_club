@@ -42,7 +42,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-type Row = { grade: number; classNum: number; number: number; name: string; gender?: Gender };
+type Row = { clubName: string; name: string; gender: Gender; level: "A" | "B" | "C" | "D" | "초심"; authCode: string };
 
 function detectGender(token: string): Gender | null {
   const t = token.trim();
@@ -51,29 +51,31 @@ function detectGender(token: string): Gender | null {
   return null;
 }
 
-function parsePaste(text: string): { rows: Row[]; errors: number } {
+function parsePaste(text: string, clubName: string): { rows: Row[]; errors: number } {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows: Row[] = [];
   let errors = 0;
   for (const line of lines) {
     const parts = line.split(/[\t,\s]+/).filter(Boolean);
     if (parts.length < 4) { errors++; continue; }
-    const [g, c, n, ...rest] = parts;
-    let gender: Gender | undefined;
-    for (let i = rest.length - 1; i >= 0; i--) {
-      const gd = detectGender(rest[i]);
-      if (gd) {
-        gender = gd;
-        rest.splice(i, 1);
-        break;
-      }
-    }
-    const grade = parseInt(g, 10);
-    const classNum = parseInt(c, 10);
-    const number = parseInt(n, 10);
-    const name = rest.join(" ").trim();
-    if (!grade || !classNum || !number || !name || grade < 1 || grade > 6) { errors++; continue; }
-    rows.push({ grade, classNum, number, name, gender });
+    
+    // Format: [Name] [Gender: 남/여] [Level: A/B/C/D/초심] [PIN: 4자리]
+    const name = parts[0];
+    let gender: Gender = "M";
+    let level: "A" | "B" | "C" | "D" | "초심" = "초심";
+    let authCode = "1234";
+    
+    const gPart = parts.find(p => detectGender(p) !== null);
+    if (gPart) gender = detectGender(gPart);
+    
+    const lPart = parts.find(p => ["A", "B", "C", "D", "초심"].includes(p.toUpperCase().trim()));
+    if (lPart) level = lPart.toUpperCase().trim() as any;
+    
+    const pinPart = parts.find(p => /^\d{4}$/.test(p));
+    if (pinPart) authCode = pinPart;
+    
+    if (!name) { errors++; continue; }
+    rows.push({ clubName, name, gender, level, authCode });
   }
   return { rows, errors };
 }
@@ -237,7 +239,7 @@ export function AdminPanel({
 
     onUpdateMatchScore(editingMatchId, sA, sB);
     setEditingMatchId(null);
-    toast.success("경기 점수가 수정되었으며 두 학생의 보너스 및 최종 RP가 오차 없이 즉시 재계산되어 덮어씌워졌습니다!");
+    toast.success("경기 점수가 수정되었으며 두 선수의 보너스 및 최종 RP가 오차 없이 즉시 재계산되어 덮어씌워졌습니다!");
   };
 
   // 3.9. All Match Records Filtered Matches Computing
@@ -308,57 +310,20 @@ export function AdminPanel({
     }
 
     if (matchFilterType === "class") {
-      const query = appliedSearchGradeClass.trim();
+      const query = appliedSearchGradeClass.trim().toLowerCase();
       if (!query) return []; // 검색하기 전에는 빈 배열 반환하여 버벅임 방지
 
-      // 1. Grade-Class format like "6-1", "6 1", "6/1", "6학년 1반"
-      const parts = query.split(/[\-\s\/학년반]+/);
-      if (parts.length >= 2) {
-        const qGrade = parseInt(parts[0], 10);
-        const qClass = parseInt(parts[1], 10);
-        if (!isNaN(qGrade) && !isNaN(qClass)) {
-          return result.filter((m) => {
-            const playerA = students.find((s) => s.id === m.playerAId);
-            const playerB = students.find((s) => s.id === m.playerBId);
-            const playerA2 = m.playerA2Id ? students.find((s) => s.id === m.playerA2Id) : null;
-            const playerB2 = m.playerB2Id ? students.find((s) => s.id === m.playerB2Id) : null;
-            const aMatch = (playerA && playerA.grade === qGrade && playerA.classNum === qClass) ||
-                           (playerA2 && playerA2.grade === qGrade && playerA2.classNum === qClass);
-            const bMatch = (playerB && playerB.grade === qGrade && playerB.classNum === qClass) ||
-                           (playerB2 && playerB2.grade === qGrade && playerB2.classNum === qClass);
-            return aMatch || bMatch;
-          });
-        }
-      }
-
-      // 2. Just a single number like "6" -> match grade OR class
-      const qNum = parseInt(query, 10);
-      if (!isNaN(qNum)) {
-        return result.filter((m) => {
-          const playerA = students.find((s) => s.id === m.playerAId);
-          const playerB = students.find((s) => s.id === m.playerBId);
-          const playerA2 = m.playerA2Id ? students.find((s) => s.id === m.playerA2Id) : null;
-          const playerB2 = m.playerB2Id ? students.find((s) => s.id === m.playerB2Id) : null;
-          return (
-            (playerA && (playerA.grade === qNum || playerA.classNum === qNum)) ||
-            (playerB && (playerB.grade === qNum || playerB.classNum === qNum)) ||
-            (playerA2 && (playerA2.grade === qNum || playerA2.classNum === qNum)) ||
-            (playerB2 && (playerB2.grade === qNum || playerB2.classNum === qNum))
-          );
-        });
-      }
-
-      // 3. String representation
       return result.filter((m) => {
         const playerA = students.find((s) => s.id === m.playerAId);
         const playerB = students.find((s) => s.id === m.playerBId);
         const playerA2 = m.playerA2Id ? students.find((s) => s.id === m.playerA2Id) : null;
         const playerB2 = m.playerB2Id ? students.find((s) => s.id === m.playerB2Id) : null;
-        const aStr = playerA ? `${playerA.grade}-${playerA.classNum}` : "";
-        const a2Str = playerA2 ? `${playerA2.grade}-${playerA2.classNum}` : "";
-        const bStr = playerB ? `${playerB.grade}-${playerB.classNum}` : "";
-        const b2Str = playerB2 ? `${playerB2.grade}-${playerB2.classNum}` : "";
-        return aStr.includes(query) || a2Str.includes(query) || bStr.includes(query) || b2Str.includes(query);
+        
+        const aMatch = (playerA && (playerA.level.toLowerCase().includes(query) || playerA.clubName.toLowerCase().includes(query))) ||
+                       (playerA2 && (playerA2.level.toLowerCase().includes(query) || playerA2.clubName.toLowerCase().includes(query)));
+        const bMatch = (playerB && (playerB.level.toLowerCase().includes(query) || playerB.clubName.toLowerCase().includes(query))) ||
+                       (playerB2 && (playerB2.level.toLowerCase().includes(query) || playerB2.clubName.toLowerCase().includes(query)));
+        return aMatch || bMatch;
       });
     }
 
@@ -370,7 +335,7 @@ export function AdminPanel({
   // Bulk upload states
   const [text, setText] = useState("");
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const parsed = useMemo(() => parsePaste(text), [text]);
+  const parsed = useMemo(() => parsePaste(text, session?.schoolName || "에이스"), [text, session]);
 
   // Student editor states
   const [searchQuery, setSearchQuery] = useState("");
@@ -378,8 +343,7 @@ export function AdminPanel({
   const [editRpInput, setEditRpInput] = useState<string>("");
 
   // 학년/반 대형 필터 브라우저 상태
-  const [filterGrade, setFilterGrade] = useState<number | null>(null);
-  const [filterClassNum, setFilterClassNum] = useState<number | null>(null);
+  const [filterLevel, setFilterLevel] = useState<string | null>(null);
 
   // 휴면 강등(RP Decay) 관리 상태
   const [inactiveDays, setInactiveDays] = useState("7");
@@ -411,15 +375,15 @@ export function AdminPanel({
     });
 
     if (dormantStudents.length === 0) {
-      return toast.info(`최근 ${days}일 동안 경기가 없고 골드 등급 이상인 휴면 감점 대상 학생이 없습니다.`);
+      return toast.info(`최근 ${days}일 동안 경기가 없고 골드 등급 이상인 휴면 감점 대상 선수가 없습니다.`);
     }
 
-    const confirmMsg = `골드 등급 이상이면서 최근 ${days}일 이상 경기를 치르지 않은 휴면 학생 ${dormantStudents.length}명에게서 각각 -${amount} RP를 일괄 감점 차감하시겠습니까?\n\n[차감 대상 학생]\n${dormantStudents.map((s) => `- ${s.grade}학년 ${s.classNum}반 ${s.name} (${s.rp} RP)`).join("\n")}`;
+    const confirmMsg = `골드 등급 이상이면서 최근 ${days}일 이상 경기를 치르지 않은 휴면 회원 ${dormantStudents.length}명에게서 각각 -${amount} RP를 일괄 감점 차감하시겠습니까?\n\n[차감 대상 회원]\n${dormantStudents.map((s) => `- ${s.clubName} ${s.level}급 ${s.name} (${s.rp} RP)`).join("\n")}`;
 
     if (!confirm(confirmMsg)) return;
 
     const decayCount = onBulkDecay(days, amount);
-    toast.success(`휴면 유저 일괄 감점이 반영되었습니다! 총 ${decayCount}명의 학생 RP가 정상적으로 차감 처리되었습니다.`);
+    toast.success(`휴면 유저 일괄 감점이 반영되었습니다! 총 ${decayCount}명의 회원 RP가 정상적으로 차감 처리되었습니다.`);
   };
 
   // 티어 및 RP 수동 설정 폼 상태
@@ -474,21 +438,14 @@ export function AdminPanel({
     toast.success("티어 기준 및 RP 변동폭 설정이 리그 전체에 즉시 반영되었습니다!");
   };
 
-  // 한 학급에 속한 학생들 목록 필터링
+  // 레벨 필터링된 회원 목록
   const classFilteredStudents = useMemo(() => {
-    if (filterGrade == null || filterClassNum == null) return [];
-    return students
-      .filter((s) => s.grade === filterGrade && s.classNum === filterClassNum)
-      .sort((a, b) => a.number - b.number);
-  }, [students, filterGrade, filterClassNum]);
-  
-  // 해당 학년에서 실제로 존재하는 반들을 추출
-  const availableClassesForFilter = useMemo(() => {
-    if (filterGrade == null) return [];
-    const set = new Set<number>();
-    students.filter((s) => s.grade === filterGrade).forEach((s) => set.add(s.classNum));
-    return Array.from(set).sort((a, b) => a - b);
-  }, [students, filterGrade]);
+    let list = students;
+    if (filterLevel) {
+      list = list.filter((s) => s.level === filterLevel);
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  }, [students, filterLevel]);
 
   const selectedStudent = useMemo(() => {
     return students.find((s) => s.id === selectedStudentId) ?? null;
@@ -499,7 +456,7 @@ export function AdminPanel({
     setSelectedStudentId(s.id);
     setEditRpInput(s.rp.toString());
     setSearchQuery(""); // Clear search query after selection
-    toast.info(`${s.name} 학생의 프로필을 로드했습니다.`);
+    toast.info(`${s.name} 선수의 프로필을 로드했습니다.`);
   };
 
   // Search filtered students list for editor select
@@ -507,7 +464,7 @@ export function AdminPanel({
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
     return students.filter(
-      (s) => s.name.toLowerCase().includes(q) || `${s.grade}-${s.classNum}`.includes(q)
+      (s) => s.name.toLowerCase().includes(q) || s.level.toLowerCase().includes(q) || s.clubName.toLowerCase().includes(q)
     );
   }, [students, searchQuery]);
 
@@ -519,7 +476,7 @@ export function AdminPanel({
       return toast.error("올바른 RP 점수 값을 입력해주세요 (0점 이상)");
     }
     onUpdateRP(selectedStudent.id, parsedRp);
-    toast.success(`${selectedStudent.name} 학생의 RP를 ${parsedRp}점으로 수동 조정했습니다.`);
+    toast.success(`${selectedStudent.name} 선수의 RP를 ${parsedRp}점으로 수동 조정했습니다.`);
   };
 
   // Apply RP presets instantly
@@ -528,7 +485,7 @@ export function AdminPanel({
     const nextRp = Math.max(0, selectedStudent.rp + delta);
     setEditRpInput(nextRp.toString());
     onUpdateRP(selectedStudent.id, nextRp);
-    toast.success(`${selectedStudent.name} 학생의 RP를 ${delta > 0 ? "+" : ""}${delta} 조정했습니다. (${nextRp} RP)`);
+    toast.success(`${selectedStudent.name} 선수의 RP를 ${delta > 0 ? "+" : ""}${delta} 조정했습니다. (${nextRp} RP)`);
   };
 
   // Student specific matches timeline
@@ -541,7 +498,7 @@ export function AdminPanel({
 
   // Bulk NEIS commit
   const commit = () => {
-    if (parsed.rows.length === 0) return toast.error("등록할 학생이 없습니다");
+    if (parsed.rows.length === 0) return toast.error("등록할 선수가 없습니다");
     const { added, kept } = onUpsert(parsed.rows);
     setText("");
     toast.success(`신규 ${added}명 등록, 기존 ${kept}명 전적 유지`);
@@ -552,24 +509,25 @@ export function AdminPanel({
     const sortedStudents = [...students].sort((a, b) => b.rp - a.rp);
     
     // Headers
-    const headers = ["순위", "학년", "반", "번호", "이름", "성별", "RP 점수", "티어", "승리", "패배", "승률"];
+    const headers = ["순위", "클럽", "이름", "성별", "급수", "RP 점수", "티어", "MMR", "배치 경기수", "승리", "패배", "승률"];
     
     // Rows
     const rows = sortedStudents.map((s, index) => {
       const total = s.wins + s.losses;
       const winRate = total === 0 ? 0 : Math.round((s.wins / total) * 100);
-      const tierLabel = getFullTierLabel(s.rp, thresholds);
-      const genderLabel = s.gender === "M" ? "남" : s.gender === "F" ? "여" : "미지정";
+      const tierLabel = getFullTierLabel(s.rp, thresholds, s.placementGamesPlayed);
+      const genderLabel = s.gender === "M" ? "남" : "여";
       
       return [
         index + 1,
-        s.grade,
-        s.classNum,
-        s.number,
+        s.clubName || "에이스",
         s.name,
         genderLabel,
+        s.level,
         s.rp,
         tierLabel,
+        s.hiddenMMR,
+        s.placementGamesPlayed,
         s.wins,
         s.losses,
         `${winRate}%`
@@ -615,36 +573,37 @@ export function AdminPanel({
 
         // 두 번째 줄부터 데이터 파싱
         for (let i = 1; i < lines.length; i++) {
-          // 따옴표로 감싸진 필드 파싱 정규식 적용 (쉼표 분할)
           const parts = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
-          if (parts.length < 10) continue; // 필수 컬럼 부족 시 스킵
+          if (parts.length < 10) continue;
 
-          const grade = parseInt(parts[1], 10);
-          const classNum = parseInt(parts[2], 10);
-          const number = parseInt(parts[3], 10);
-          const name = parts[4];
-          const genderRaw = parts[5];
-          const rp = parseInt(parts[6], 10);
-          const wins = parseInt(parts[8], 10);
-          const losses = parseInt(parts[9], 10);
+          const clubName = parts[1] || "에이스";
+          const name = parts[2];
+          const genderRaw = parts[3];
+          const level = parts[4] as any;
+          const rp = parseInt(parts[5], 10);
+          const hiddenMMR = parts[7] ? parseInt(parts[7], 10) : 1000;
+          const placementGamesPlayed = parts[8] ? parseInt(parts[8], 10) : 5;
+          const wins = parseInt(parts[9], 10);
+          const losses = parseInt(parts[10], 10);
 
-          if (isNaN(grade) || isNaN(classNum) || isNaN(number) || !name || isNaN(rp) || isNaN(wins) || isNaN(losses)) {
-            continue; // 유효성 검사 실패 스킵
+          if (!name || isNaN(rp) || isNaN(wins) || isNaN(losses)) {
+            continue;
           }
 
-          let gender: Gender = "U";
-          if (genderRaw === "남" || genderRaw === "M" || genderRaw === "m" || genderRaw === "남자") gender = "M";
+          let gender: Gender = "M";
           if (genderRaw === "여" || genderRaw === "F" || genderRaw === "f" || genderRaw === "여자") gender = "F";
 
           parsedStudents.push({
-            id: Math.random().toString(36).slice(2, 10), // 새로운 임시 ID 발급
-            grade,
-            classNum,
-            number,
+            id: Math.random().toString(36).slice(2, 10),
+            clubName,
             name,
             gender,
+            level: level || "초심",
+            authCode: "1234",
+            placementGamesPlayed,
+            hiddenMMR,
             rp,
-            recent: [], // 복원 시 최근 경기 최근 목록은 빈 배열로 초기화
+            recent: [],
             wins,
             losses
           });
@@ -701,7 +660,7 @@ export function AdminPanel({
 
   // Global reset check
   const handleGlobalReset = () => {
-    const password = window.prompt("모든 데이터를 완전히 리셋하고 새 시즌을 시작하려면 교사 비밀번호('admin1234')를 입력하세요:");
+    const password = window.prompt("모든 데이터를 완전히 리셋하고 새 시즌을 시작하려면 관리자 비밀번호('admin1234')를 입력하세요:");
     if (password === null) return;
     if (password === "admin1234") {
       if (window.confirm("정말로 모든 경기 기록을 삭제하고 전교생의 점수를 1000점(0승 0패)으로 일괄 초기화하시겠습니까? 이 작업은 취소할 수 없습니다.")) {
@@ -717,10 +676,10 @@ export function AdminPanel({
   // Individual student reset check
   const handleStudentReset = () => {
     if (!selectedStudent) return;
-    if (window.confirm(`정말로 [${selectedStudent.name}] 학생의 모든 전적(0승 0패, 1000 RP)을 초기화하시겠습니까? 이 학생이 치른 모든 경기 기록도 자동으로 삭제 및 처리됩니다.`)) {
+    if (window.confirm(`정말로 [${selectedStudent.name}] 선수의 모든 전적(0승 0패, 1000 RP)을 초기화하시겠습니까? 이 선수가 치른 모든 경기 기록도 자동으로 삭제 및 처리됩니다.`)) {
       onResetStudent(selectedStudent.id);
       setEditRpInput("1000");
-      toast.success(`${selectedStudent.name} 학생의 기록을 완전 초기화했습니다.`);
+      toast.success(`${selectedStudent.name} 선수의 기록을 완전 초기화했습니다.`);
     }
   };
 
@@ -1010,7 +969,7 @@ export function AdminPanel({
               )}
             >
               <Users className="size-3.5" />
-              학년·반 검색 (6-1 등)
+              급수·클럽 검색
             </button>
           </div>
 
@@ -1095,7 +1054,7 @@ export function AdminPanel({
                 <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/75" />
                 <Input
                   type="text"
-                  placeholder="조회할 학년-반을 입력하세요 (예: 6-1, 6)..."
+                  placeholder="조회할 급수 또는 클럽을 입력하세요 (예: A, 에이스)..."
                   value={matchSearchGradeClass}
                   onChange={(e) => setMatchSearchGradeClass(e.target.value)}
                   onKeyDown={(e) => {
@@ -1212,13 +1171,13 @@ export function AdminPanel({
                             <div className="flex items-center gap-1.5">
                               <GenderMark gender={playerA.gender} className="size-3.5 text-[9px]" />
                               <span className={cn("font-bold", aWon && "text-neon-blue")}>{playerA.name}</span>
-                              <span className="text-[10px] text-muted-foreground">({playerA.grade}-{playerA.classNum})</span>
+                              <span className="text-[10px] text-muted-foreground">({playerA.level}급)</span>
                             </div>
                             {playerA2 && (
                               <div className="flex items-center gap-1.5 border-t border-border/10 pt-1">
                                 <GenderMark gender={playerA2.gender} className="size-3.5 text-[9px]" />
                                 <span className={cn("font-bold", aWon && "text-neon-blue")}>{playerA2.name}</span>
-                                <span className="text-[10px] text-muted-foreground">({playerA2.grade}-{playerA2.classNum})</span>
+                                <span className="text-[10px] text-muted-foreground">({playerA2.level}급)</span>
                               </div>
                             )}
                           </div>
@@ -1239,13 +1198,13 @@ export function AdminPanel({
                             <div className="flex items-center gap-1.5">
                               <GenderMark gender={playerB.gender} className="size-3.5 text-[9px]" />
                               <span className={cn("font-bold", !aWon && "text-neon-blue")}>{playerB.name}</span>
-                              <span className="text-[10px] text-muted-foreground">({playerB.grade}-{playerB.classNum})</span>
+                              <span className="text-[10px] text-muted-foreground">({playerB.level}급)</span>
                             </div>
                             {playerB2 && (
                               <div className="flex items-center gap-1.5 border-t border-border/10 pt-1">
                                 <GenderMark gender={playerB2.gender} className="size-3.5 text-[9px]" />
                                 <span className={cn("font-bold", !aWon && "text-neon-blue")}>{playerB2.name}</span>
-                                <span className="text-[10px] text-muted-foreground">({playerB2.grade}-{playerB2.classNum})</span>
+                                <span className="text-[10px] text-muted-foreground">({playerB2.level}급)</span>
                               </div>
                             )}
                           </div>
@@ -1487,7 +1446,7 @@ export function AdminPanel({
                       <div className="flex items-center gap-2">
                         <GenderMark gender={s.gender} />
                         <span className="font-bold">{s.name}</span>
-                        <span className="text-xs text-muted-foreground">({s.grade}학년 {s.classNum}반 {s.number}번)</span>
+                        <span className="text-xs text-muted-foreground">({s.clubName || "에이스"} · {s.level}급)</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <TierBadge rp={s.rp} thresholds={thresholds} />
@@ -1549,7 +1508,7 @@ export function AdminPanel({
                   </button>
                 ))}
                 {availableClassesForFilter.length === 0 && (
-                  <span className="text-xs text-muted-foreground py-2 block">해당 학년에 등록된 학생이 없습니다. 명렬표를 등록해주세요.</span>
+                  <span className="text-xs text-muted-foreground py-2 block">해당 학년에 등록된 선수가 없습니다. 명렬표를 등록해주세요.</span>
                 )}
               </div>
             </div>
@@ -1557,10 +1516,10 @@ export function AdminPanel({
         </div>
 
         {/* Class Students Roster Grid Card */}
-        {filterGrade != null && filterClassNum != null && (
+        {true && (
           <div className="mt-5 pt-4 border-t border-border/30 animate-in fade-in duration-300">
             <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider block mb-2">
-              학급 명단 브라우저 ({filterGrade}학년 {filterClassNum}반 · {classFilteredStudents.length}명)
+              회원 명단 브라우저 (필터링 결과: {classFilteredStudents.length}명)
             </span>
             
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1575,7 +1534,7 @@ export function AdminPanel({
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-sm font-bold text-muted-foreground bg-muted/40 size-8 rounded-full flex items-center justify-center shrink-0">
-                      {s.number}
+                      {s.level}
                     </span>
                     <div>
                       <div className="flex items-center gap-1.5 font-bold">
@@ -1608,8 +1567,8 @@ export function AdminPanel({
                             <ShieldAlert className="size-5 shrink-0" /> 정말 학생을 삭제하시겠습니까?
                           </AlertDialogTitle>
                           <AlertDialogDescription className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                            정말 <span className="font-black text-foreground">[{s.name}] ({s.grade}학년 {s.classNum}반 {s.number}번)</span> 학생의 모든 데이터를 영구 삭제하시겠습니까?<br /><br />
-                            이 학생이 치른 <span className="font-bold text-destructive">모든 과거 경기 기록도 자동으로 제거</span>되며, 상대방 학생들의 승패와 RP 수치도 경기 전 상태로 부분 롤백됩니다. 이 작업은 되돌릴 수 없습니다.
+                            정말 <span className="font-black text-foreground">[{s.name}] ({s.clubName || "에이스"} · {s.level}급)</span> 선수의 모든 데이터를 영구 삭제하시겠습니까?<br /><br />
+                            이 선수가 치른 <span className="font-bold text-destructive">모든 과거 경기 기록도 자동으로 제거</span>되며, 상대방 학생들의 승패와 RP 수치도 경기 전 상태로 부분 롤백됩니다. 이 작업은 되돌릴 수 없습니다.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter className="mt-6 gap-2">
@@ -1636,7 +1595,7 @@ export function AdminPanel({
               ))}
               {classFilteredStudents.length === 0 && (
                 <div className="col-span-full py-6 text-center text-xs text-muted-foreground border border-dashed border-border/30 rounded-xl bg-muted/5">
-                  선택하신 학급에 등록된 학생이 없습니다.
+                  선택하신 학급에 등록된 선수가 없습니다.
                 </div>
               )}
             </div>
@@ -1655,7 +1614,7 @@ export function AdminPanel({
                 </div>
                 
                 <span className="text-xs text-muted-foreground font-semibold">
-                  {selectedStudent.grade}학년 {selectedStudent.classNum}반 · {selectedStudent.number}번
+                  {selectedStudent.clubName || "에이스"} · {selectedStudent.level}급
                 </span>
                 
                 <div className="mt-1 flex items-center gap-2 text-2xl font-black">
@@ -1767,7 +1726,7 @@ export function AdminPanel({
                               <span>VS</span>
                               <GenderMark gender={opponent.gender} className="size-3.5 text-[9px]" />
                               <span className="font-bold text-foreground">{opponent.name}</span>
-                              <span>({opponent.grade}-{opponent.classNum})</span>
+                              <span>({opponent.level}급)</span>
                             </div>
                             <div className="text-[10px] text-muted-foreground mt-0.5">{matchDateStr}</div>
                           </div>
@@ -1786,9 +1745,9 @@ export function AdminPanel({
                               const deltaWinner = isPlayerA ? (m.rpDeltaA !== undefined ? Math.abs(m.rpDeltaA) : 25) : (m.rpDeltaB !== undefined ? Math.abs(m.rpDeltaB) : 25);
                               const deltaLoser = !isPlayerA ? (m.rpDeltaA !== undefined ? Math.abs(m.rpDeltaA) : 20) : (m.rpDeltaB !== undefined ? Math.abs(m.rpDeltaB) : 20);
                               
-                              if (window.confirm(`정말로 이 경기(VS ${opponent.name}) 기록을 완벽히 삭제하고, 두 학생의 RP 변동 수치를 경기 이전 상태로 양방향 롤백하시겠습니까?\n\n- 승자: RP -${deltaWinner}, 1승 차감\n- 패자: RP +${deltaLoser}, 1패 차감`)) {
+                              if (window.confirm(`정말로 이 경기(VS ${opponent.name}) 기록을 완벽히 삭제하고, 두 선수의 RP 변동 수치를 경기 이전 상태로 양방향 롤백하시겠습니까?\n\n- 승자: RP -${deltaWinner}, 1승 차감\n- 패자: RP +${deltaLoser}, 1패 차감`)) {
                                 onDeleteMatch(m.id);
-                                toast.success("경기 기록이 완벽히 삭제되었으며 두 학생의 RP가 경기 이전으로 안전하게 복구되었습니다!");
+                                toast.success("경기 기록이 완벽히 삭제되었으며 두 선수의 RP가 경기 이전으로 안전하게 복구되었습니다!");
                               }
                             }}
                             variant="ghost"
@@ -1828,7 +1787,7 @@ export function AdminPanel({
               <h3 className="font-bold">전체 데이터 CSV 다운로드</h3>
             </div>
             <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-              현재 등록된 모든 선수들의 순위, 소속 학년/반/번호, 이름, 성별, 최종 RP 점수, 티어, 경기 승패 전적 기록을 담은 엑셀 호환형 CSV 백업 파일을 생성하여 로컬 PC에 즉시 다운로드합니다.
+              현재 등록된 모든 선수들의 순위, 소속 급수/성별, 이름, 성별, 최종 RP 점수, 티어, 경기 승패 전적 기록을 담은 엑셀 호환형 CSV 백업 파일을 생성하여 로컬 PC에 즉시 다운로드합니다.
             </p>
           </div>
           <Button
@@ -1874,7 +1833,7 @@ export function AdminPanel({
           <div>
             <div className="flex items-center gap-2 text-muted-foreground">
               <Database className="size-5" />
-              <h3 className="font-bold text-foreground">나이스(NEIS) 명렬표 일괄 등록</h3>
+              <h3 className="font-bold text-foreground">회원 명렬표 일괄 등록</h3>
             </div>
             <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
               체육 수업을 시작하거나 새 학기에 여러 반 학생 정보를 동시에 간편히 대량 업로드하여 등록할 때 사용할 수 있습니다. 기존 전적 정보는 완벽하게 보호됩니다.
@@ -1895,9 +1854,9 @@ export function AdminPanel({
       {showBulkUpload && (
         <Card className="border-border/60 bg-card/60 p-5 backdrop-blur shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="mb-3">
-            <h3 className="font-bold text-sm">나이스(NEIS) 명렬표 일괄 복사/붙여넣기</h3>
+            <h3 className="font-bold text-sm">회원 명렬표 일괄 복사/붙여넣기</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              엑셀에서 <span className="font-mono text-foreground bg-muted px-1 rounded">학년 / 반 / 번호 / 이름 / (성별)</span> 순으로 정렬된 셀을 복사 후 붙여넣으세요. 성별(남/여)은 없어도 되며 누락 시 미지정 처리됩니다. 이미 등록된 학생의 전적은 철저히 유지됩니다.
+              엑셀에서 <span className="font-mono text-foreground bg-muted px-1 rounded">이름 / 성별(남/여) / 급수(A-D/초심) / 핀코드(4자리)</span> 순으로 정렬된 셀을 복사 후 붙여넣으세요. 성별(남/여)은 없어도 되며 누락 시 미지정 처리됩니다. 이미 등록된 선수의 전적은 철저히 유지됩니다.
             </p>
           </div>
           <Textarea
@@ -1928,9 +1887,9 @@ export function AdminPanel({
                   <thead className="sticky top-0 bg-muted text-[10px] uppercase text-muted-foreground">
                     <tr>
                       <th className="px-3 py-1.5 text-left">#</th>
-                      <th className="px-3 py-1.5 text-left">학년</th>
-                      <th className="px-3 py-1.5 text-left">반</th>
-                      <th className="px-3 py-1.5 text-left">번호</th>
+                      <th className="px-3 py-1.5 text-left">클럽</th>
+                      <th className="px-3 py-1.5 text-left">급수</th>
+                      <th className="px-3 py-1.5 text-left">핀코드</th>
                       <th className="px-3 py-1.5 text-left">이름</th>
                       <th className="px-3 py-1.5 text-left">성별</th>
                     </tr>
@@ -1939,9 +1898,9 @@ export function AdminPanel({
                     {parsed.rows.map((r, i) => (
                       <tr key={i} className="border-b border-border/20">
                         <td className="px-3 py-1.5 text-muted-foreground tabular-nums">{i + 1}</td>
-                        <td className="px-3 py-1.5 tabular-nums">{r.grade}</td>
-                        <td className="px-3 py-1.5 tabular-nums">{r.classNum}</td>
-                        <td className="px-3 py-1.5 tabular-nums">{r.number}</td>
+                        <td className="px-3 py-1.5 truncate max-w-[80px]">{r.clubName}</td>
+                        <td className="px-3 py-1.5 font-bold">{r.level}급</td>
+                        <td className="px-3 py-1.5 font-mono">{r.authCode}</td>
                         <td className="px-3 py-1.5 font-medium">{r.name}</td>
                         <td className="px-3 py-1.5"><GenderMark gender={r.gender ?? "U"} className="size-3.5 text-[9px]" /></td>
                       </tr>
@@ -2262,7 +2221,7 @@ export function AdminPanel({
           <div className="max-w-xl">
             <h4 className="text-sm font-bold text-foreground">로컬 전체 기록 강제 리셋 (기록 소멸)</h4>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              이 작업은 시스템 상의 **모든 등록된 학생들의 경기 타임라인 및 결과 기록을 완벽히 소멸**시키고, 전체 학생의 RP 점수 및 전적 데이터를 **초기값(1000점, 0승 0패, 최근기록 없음)**으로 일괄 초기화합니다. 실행 시 교사 승인 비밀번호 입력이 필요합니다.
+              이 작업은 시스템 상의 **모든 등록된 학생들의 경기 타임라인 및 결과 기록을 완벽히 소멸**시키고, 전체 선수의 RP 점수 및 전적 데이터를 **초기값(1000점, 0승 0패, 최근기록 없음)**으로 일괄 초기화합니다. 실행 시 교사 승인 비밀번호 입력이 필요합니다.
             </p>
           </div>
           

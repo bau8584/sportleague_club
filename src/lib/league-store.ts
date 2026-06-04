@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { Student, Match, Gender, TierName } from "./league-types";
+import { determineDiscipline } from "./league-types";
 import { studentKey, getTier, getTierSubdivision, getFullTierLabel, TIER_ORDER } from "./league-types";
 import { toast } from "sonner";
 
@@ -22,6 +23,7 @@ export type ActiveBonuses = {
 };
 
 const TIER_RANKING: Record<TierName, number> = {
+  Unranked: 0,
   Bronze: 1,
   Silver: 2,
   Gold: 3,
@@ -84,36 +86,28 @@ async function getTeachersList(forceRefresh = false): Promise<any[]> {
 }
 
 const SEED_STUDENTS: Student[] = [
-  { id: uid(), grade: 5, classNum: 1, number: 1,  name: "강서준", gender: "M", rp: 1320, recent: ["W","W","L","W","W"], wins: 8, losses: 3 },
-  { id: uid(), grade: 5, classNum: 1, number: 2,  name: "김민재", gender: "M", rp: 1180, recent: ["L","W","W","L","W"], wins: 6, losses: 5 },
-  { id: uid(), grade: 6, classNum: 2, number: 1,  name: "이지우", gender: "F", rp: 1620, recent: ["W","W","W","W","L"], wins: 12, losses: 2 },
-  { id: uid(), grade: 6, classNum: 2, number: 2,  name: "박지성", gender: "M", rp: 1450, recent: ["W","L","W","W","W"], wins: 9, losses: 3 },
-  { id: uid(), grade: 4, classNum: 3, number: 1,  name: "최서아", gender: "F", rp: 980,  recent: ["L","L","W","L","W"], wins: 3, losses: 6 },
-  { id: uid(), grade: 3, classNum: 1, number: 1,  name: "정윤우", gender: "M", rp: 1050, recent: ["W","L","L","W","L"], wins: 4, losses: 5 },
-  { id: uid(), grade: 6, classNum: 1, number: 1,  name: "강하윤", gender: "F", rp: 1530, recent: ["W","W","L","W","W"], wins: 10, losses: 4 },
-  { id: uid(), grade: 5, classNum: 2, number: 1,  name: "윤도현", gender: "M", rp: 1210, recent: ["W","L","W","L","W"], wins: 7, losses: 5 },
-  { id: uid(), grade: 5, classNum: 2, number: 2,  name: "이지민", gender: "F", rp: 1110, recent: ["L","W","L","W","L"], wins: 5, losses: 7 },
-  { id: uid(), grade: 6, classNum: 1, number: 2,  name: "한주원", gender: "M", rp: 1390, recent: ["W","W","W","L","L"], wins: 8, losses: 4 },
-  { id: uid(), grade: 6, classNum: 1, number: 3,  name: "김수아", gender: "F", rp: 1490, recent: ["W","L","W","W","W"], wins: 10, losses: 2 },
-  { id: uid(), grade: 4, classNum: 1, number: 1,  name: "최예준", gender: "M", rp: 1020, recent: ["L","W","W","L","L"], wins: 4, losses: 6 },
-  { id: uid(), grade: 4, classNum: 1, number: 2,  name: "박서윤", gender: "F", rp: 950,  recent: ["L","L","L","W","W"], wins: 2, losses: 8 },
-  { id: uid(), grade: 3, classNum: 2, number: 1,  name: "송민우", gender: "M", rp: 1040, recent: ["W","L","W","L","W"], wins: 5, losses: 5 },
-  { id: uid(), grade: 3, classNum: 2, number: 2,  name: "윤아린", gender: "F", rp: 920,  recent: ["L","L","W","L","L"], wins: 2, losses: 8 },
-  { id: uid(), grade: 5, classNum: 3, number: 1,  name: "정민서", gender: "F", rp: 1250, recent: ["W","W","L","W","L"], wins: 7, losses: 5 },
-  { id: uid(), grade: 5, classNum: 3, number: 2,  name: "조현우", gender: "M", rp: 1300, recent: ["W","W","W","L","W"], wins: 9, losses: 3 },
-  { id: uid(), grade: 6, classNum: 3, number: 1,  name: "신지아", gender: "F", rp: 1580, recent: ["W","W","W","W","W"], wins: 13, losses: 1 },
-  { id: uid(), grade: 6, classNum: 3, number: 2,  name: "유재희", gender: "M", rp: 1410, recent: ["L","W","W","W","L"], wins: 8, losses: 4 },
-  { id: uid(), grade: 4, classNum: 2, number: 1,  name: "김하은", gender: "F", rp: 1070, recent: ["W","W","L","L","W"], wins: 6, losses: 4 },
-  { id: uid(), grade: 4, classNum: 2, number: 2,  name: "임지우", gender: "M", rp: 1150, recent: ["W","L","W","W","L"], wins: 8, losses: 5 },
-  { id: uid(), grade: 3, classNum: 3, number: 1,  name: "서준우", gender: "M", rp: 1010, recent: ["L","L","W","W","L"], wins: 3, losses: 6 },
-  { id: uid(), grade: 3, classNum: 3, number: 2,  name: "오다인", gender: "F", rp: 980,  recent: ["W","L","L","L","W"], wins: 4, losses: 6 },
-  { id: uid(), grade: 5, classNum: 1, number: 3,  name: "황지안", gender: "F", rp: 1220, recent: ["L","W","W","W","L"], wins: 7, losses: 5 },
-  { id: uid(), grade: 5, classNum: 1, number: 4,  name: "박건우", gender: "M", rp: 1190, recent: ["W","L","L","W","W"], wins: 6, losses: 5 },
-  { id: uid(), grade: 6, classNum: 2, number: 3,  name: "김태양", gender: "M", rp: 1350, recent: ["L","W","L","W","W"], wins: 7, losses: 5 },
-  { id: uid(), grade: 6, classNum: 2, number: 4,  name: "송지효", gender: "F", rp: 1280, recent: ["W","L","W","L","L"], wins: 5, losses: 6 },
-  { id: uid(), grade: 4, classNum: 3, number: 2,  name: "권은우", gender: "M", rp: 1120, recent: ["W","W","L","L","W"], wins: 6, losses: 5 },
-  { id: uid(), grade: 4, classNum: 3, number: 3,  name: "윤채원", gender: "F", rp: 1050, recent: ["L","W","W","L","L"], wins: 4, losses: 6 },
-  { id: uid(), grade: 5, classNum: 2, number: 3,  name: "백현우", gender: "M", rp: 1270, recent: ["W","L","W","W","W"], wins: 9, losses: 3 }
+  { id: uid(), name: "강서준", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "1111", level: "A", placementGamesPlayed: 5, hiddenMMR: 1550, rp: 1550, recent: ["W","W","L","W","W"], wins: 8, losses: 3 },
+  { id: uid(), name: "김민재", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "2222", level: "B", placementGamesPlayed: 5, hiddenMMR: 1250, rp: 1250, recent: ["L","W","W","L","W"], wins: 6, losses: 5 },
+  { id: uid(), name: "이지우", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "3333", level: "A", placementGamesPlayed: 5, hiddenMMR: 1650, rp: 1650, recent: ["W","W","W","W","L"], wins: 12, losses: 2 },
+  { id: uid(), name: "박지성", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "4444", level: "A", placementGamesPlayed: 5, hiddenMMR: 1480, rp: 1480, recent: ["W","L","W","W","W"], wins: 9, losses: 3 },
+  { id: uid(), name: "최서아", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "5555", level: "C", placementGamesPlayed: 5, hiddenMMR: 980,  rp: 980,  recent: ["L","L","W","L","W"], wins: 3, losses: 6 },
+  { id: uid(), name: "정인우", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "6666", level: "D", placementGamesPlayed: 5, hiddenMMR: 1050, rp: 1050, recent: ["W","L","L","W","L"], wins: 4, losses: 5 },
+  { id: uid(), name: "강하윤", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "7777", level: "B", placementGamesPlayed: 5, hiddenMMR: 1510, rp: 1510, recent: ["W","W","L","W","W"], wins: 10, losses: 4 },
+  { id: uid(), name: "윤도현", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "8888", level: "B", placementGamesPlayed: 5, hiddenMMR: 1210, rp: 1210, recent: ["W","L","W","L","W"], wins: 7, losses: 5 },
+  { id: uid(), name: "이지민", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "9999", level: "C", placementGamesPlayed: 5, hiddenMMR: 1110, rp: 1110, recent: ["L","W","L","W","L"], wins: 5, losses: 7 },
+  { id: uid(), name: "한주원", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "1010", level: "B", placementGamesPlayed: 5, hiddenMMR: 1390, rp: 1390, recent: ["W","W","W","L","L"], wins: 8, losses: 4 },
+  { id: uid(), name: "김수아", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "2020", level: "A", placementGamesPlayed: 5, hiddenMMR: 1490, rp: 1490, recent: ["W","L","W","W","W"], wins: 10, losses: 2 },
+  { id: uid(), name: "최예준", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "3030", level: "C", placementGamesPlayed: 5, hiddenMMR: 1020, rp: 1020, recent: ["L","W","W","L","L"], wins: 4, losses: 6 },
+  { id: uid(), name: "박서윤", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "4040", level: "D", placementGamesPlayed: 5, hiddenMMR: 950,  rp: 950,  recent: ["L","L","L","W","W"], wins: 2, losses: 8 },
+  { id: uid(), name: "송민우", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "5050", level: "C", placementGamesPlayed: 5, hiddenMMR: 1040, rp: 1040, recent: ["W","L","W","L","W"], wins: 5, losses: 5 },
+  { id: uid(), name: "윤아린", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "6060", level: "초심", placementGamesPlayed: 5, hiddenMMR: 920,  rp: 920,  recent: ["L","L","W","L","L"], wins: 2, losses: 8 },
+  { id: uid(), name: "정민서", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "7070", level: "B", placementGamesPlayed: 5, hiddenMMR: 1250, rp: 1250, recent: ["W","W","L","W","L"], wins: 7, losses: 5 },
+  { id: uid(), name: "조현우", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "8080", level: "B", placementGamesPlayed: 5, hiddenMMR: 1300, rp: 1300, recent: ["W","W","W","L","W"], wins: 9, losses: 3 },
+  { id: uid(), name: "신지아", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "9090", level: "A", placementGamesPlayed: 5, hiddenMMR: 1580, rp: 1580, recent: ["W","W","W","W","W"], wins: 13, losses: 1 },
+  { id: uid(), name: "유재희", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "0101", level: "B", placementGamesPlayed: 5, hiddenMMR: 1410, rp: 1410, recent: ["L","W","W","W","L"], wins: 8, losses: 4 },
+  { id: uid(), name: "김하은", gender: "F", clubName: "에이스 배드민턴 클럽", authCode: "0202", level: "C", placementGamesPlayed: 5, hiddenMMR: 1070, rp: 1070, recent: ["W","W","L","L","W"], wins: 6, losses: 4 },
+  { id: uid(), name: "임지우", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "0303", level: "C", placementGamesPlayed: 3, hiddenMMR: 1150, rp: 1000, recent: ["W","L","W"], wins: 2, losses: 1 },
+  { id: uid(), name: "서준우", gender: "M", clubName: "에이스 배드민턴 클럽", authCode: "0404", level: "초심", placementGamesPlayed: 2, hiddenMMR: 1010, rp: 1000, recent: ["L","W"], wins: 1, losses: 1 }
 ];
 
 function loadJSON<T>(key: string, fallback: T): T {
@@ -168,13 +162,49 @@ export function useLeagueStore() {
   });
 
   // 리그전 커스텀 설정 상태 추가
-  const [tierThresholds, setTierThresholds] = useState<Record<TierName, number>>({
+  const [tierThresholdsState, setTierThresholds] = useState<Record<string, number>>({
     Bronze: 0,
     Silver: 1000,
     Gold: 1200,
     Platinum: 1400,
     Diamond: 1600
   });
+
+  const computedThresholds = useMemo(() => {
+    const placementFinished = students.filter(s => (s.placementGamesPlayed ?? 0) >= 5);
+    const totalFinished = placementFinished.length;
+    
+    let diamondCutoff = tierThresholdsState.Diamond ?? 1600;
+    let platinumCutoff = tierThresholdsState.Platinum ?? 1400;
+    
+    if (totalFinished > 0) {
+      const sortedRps = placementFinished.map(s => s.rp).sort((a, b) => b - a);
+      const dIndex = Math.max(0, Math.floor(totalFinished * 0.05));
+      diamondCutoff = sortedRps[dIndex] ?? tierThresholdsState.Diamond ?? 1600;
+      
+      const pIndex = Math.max(0, Math.floor(totalFinished * 0.20));
+      platinumCutoff = sortedRps[pIndex] ?? tierThresholdsState.Platinum ?? 1400;
+      
+      const goldThreshold = tierThresholdsState.Gold ?? 1200;
+      if (platinumCutoff <= goldThreshold) {
+        platinumCutoff = goldThreshold + 1;
+      }
+      if (diamondCutoff <= platinumCutoff) {
+        diamondCutoff = platinumCutoff + 1;
+      }
+    }
+    
+    return {
+      Unranked: 0,
+      Bronze: tierThresholdsState.Bronze ?? 0,
+      Silver: tierThresholdsState.Silver ?? 1000,
+      Gold: tierThresholdsState.Gold ?? 1200,
+      Platinum: platinumCutoff,
+      Diamond: diamondCutoff
+    };
+  }, [students, tierThresholdsState]);
+
+  const tierThresholds = computedThresholds;
   const [rpVariables, setRpVariables] = useState<{ winDelta: number; loseDelta: number }>({
     winDelta: 25,
     loseDelta: 20
@@ -265,183 +295,143 @@ export function useLeagueStore() {
   }, [session]);
 
   // 2. 로그인 수행 함수 (간편 로그인 시스템 도입 - 이메일/PW 제거, 동명이인 방지 추가)
-  const loginUser = useCallback(async (
-    schoolName: string, 
-    accessCodeOrName: string, 
-    role: "MASTER" | "TEACHER" | "STUDENT",
-    studentGrade?: number,
-    studentClass?: number
-  ) => {
-    const cleanedSchool = schoolName.trim();
-    const cleanedCode = accessCodeOrName.trim();
+  const loginUser = useCallback(
+    async (
+      schoolName: string, 
+      accessCodeOrName: string, 
+      role: "MASTER" | "TEACHER" | "STUDENT",
+      authCode?: string
+    ) => {
+      const cleanedSchool = schoolName.trim();
+      const cleanedCode = accessCodeOrName.trim();
 
-    // A. 🎮 게스트(체험용) 모드 예외 처리 - 구글 통신 없이 즉시 로컬 실행 가동
-    if (cleanedSchool.toLowerCase() === "guest" || cleanedSchool === "꿈나무 초등학교") {
-      const guestSession = {
-        loginId: "guest",
-        role: "TEACHER" as const,
-        schoolName: "꿈나무 초등학교 (체험용 스포츠 리그)",
-        userName: "게스트 교사",
-        scriptUrl: ""
-      };
-      setSession(guestSession);
-      saveJSON(SESSION_KEY, guestSession);
-      
-      const localStudents = loadJSON<Student[] | null>(STUDENTS_KEY, null);
-      if (!localStudents || localStudents.length < 20) {
-        setStudents(SEED_STUDENTS);
-        saveJSON(STUDENTS_KEY, SEED_STUDENTS);
-      } else {
-        setStudents(localStudents);
+      // A. 게스트 모드 예외 처리
+      if (cleanedSchool.toLowerCase() === "guest" || cleanedSchool === "꿈나무 초등학교") {
+        const guestSession = {
+          loginId: "guest",
+          role: "TEACHER" as const,
+          schoolName: "꿈나무 스포츠 클럽 (체험용)",
+          userName: "게스트 관리자",
+          scriptUrl: ""
+        };
+        setSession(guestSession);
+        saveJSON(SESSION_KEY, guestSession);
+        
+        const localStudents = loadJSON<Student[] | null>(STUDENTS_KEY, null);
+        if (!localStudents || localStudents.length < 10) {
+          setStudents(SEED_STUDENTS);
+          saveJSON(STUDENTS_KEY, SEED_STUDENTS);
+        } else {
+          setStudents(localStudents);
+        }
+        return { success: true };
       }
-      return { success: true };
-    }
 
-    setIsSyncing(true);
-    try {
-      // 1. 학생 로그인 시, 구글 마스터 DB의 등록된 교사/학교 목록을 조회하여 해당 학교의 구글 시트 scriptUrl을 동적으로 찾고 명단 최신화
-      if (role === "STUDENT") {
-        let schoolScriptUrl = "";
-        try {
-          let teachers = await getTeachersList();
-          const normalizeSchool = (name: string) => name.replace(/(초등학교|중학교|고등학교|초등|중등|고등|학교|초|클럽|동호회|회)$/, "").trim().toLowerCase();
-          const targetSchool = normalizeSchool(cleanedSchool);
-          let matchedTeacher = teachers.find(
-            (t: any) => 
-              normalizeSchool(t.schoolName) === targetSchool || 
-              normalizeSchool(t.loginId) === targetSchool
-          );
-          
-          if (!matchedTeacher) {
-            // 캐시 미스 시 강제 새로고침
-            teachers = await getTeachersList(true);
-            matchedTeacher = teachers.find(
+      setIsSyncing(true);
+      try {
+        if (role === "STUDENT") {
+          let schoolScriptUrl = "";
+          try {
+            let teachers = await getTeachersList();
+            const normalizeSchool = (name: string) => name.replace(/(초등학교|중학교|고등학교|초등|중등|고등|학교|초|클럽|동호회|회)$/, "").trim().toLowerCase();
+            const targetSchool = normalizeSchool(cleanedSchool);
+            let matchedTeacher = teachers.find(
               (t: any) => 
                 normalizeSchool(t.schoolName) === targetSchool || 
                 normalizeSchool(t.loginId) === targetSchool
             );
-          }
-
-          if (matchedTeacher) {
-            if (matchedTeacher.scriptUrl) {
-              schoolScriptUrl = matchedTeacher.scriptUrl;
+            
+            if (!matchedTeacher) {
+              teachers = await getTeachersList(true);
+              matchedTeacher = teachers.find(
+                (t: any) => 
+                  normalizeSchool(t.schoolName) === targetSchool || 
+                  normalizeSchool(t.loginId) === targetSchool
+              );
             }
-            if (matchedTeacher.settingsBonus) {
-              try {
-                const parsed = typeof matchedTeacher.settingsBonus === "string"
-                  ? JSON.parse(matchedTeacher.settingsBonus)
-                  : matchedTeacher.settingsBonus;
-                if (parsed && parsed.opMode) {
-                  setOpMode(parsed.opMode);
-                  saveJSON(OP_MODE_KEY, parsed.opMode);
+
+            if (matchedTeacher) {
+              if (matchedTeacher.scriptUrl) {
+                schoolScriptUrl = matchedTeacher.scriptUrl;
+              }
+              if (matchedTeacher.settingsBonus) {
+                try {
+                  const parsed = typeof matchedTeacher.settingsBonus === "string"
+                    ? JSON.parse(matchedTeacher.settingsBonus)
+                    : matchedTeacher.settingsBonus;
+                  if (parsed && parsed.opMode) {
+                    setOpMode(parsed.opMode);
+                    saveJSON(OP_MODE_KEY, parsed.opMode);
+                  }
+                } catch (e) {
+                  console.warn("Failed to parse settingsBonus from matched teacher:", e);
                 }
-              } catch (e) {
-                console.warn("Failed to parse settingsBonus from matched teacher:", e);
-              }
-            }
-          }
-        } catch (err) {
-          console.warn("Failed to retrieve matching school scriptUrl for student:", err);
-        }
-
-        let activeStudents = students;
-        if (schoolScriptUrl) {
-          try {
-            const res = await fetch(schoolScriptUrl);
-            const remoteData = await res.json();
-            if (remoteData.status === "success" && remoteData.students) {
-              const mappedStudents = remoteData.students.map((s: any) => ({
-                ...s,
-                grade: s.grade ? Number(s.grade) : 0,
-                classNum: s.classNum ? Number(s.classNum) : 0,
-                number: s.number ? Number(s.number) : 0
-              }));
-              activeStudents = mappedStudents;
-              setStudents(mappedStudents);
-              saveJSON(STUDENTS_KEY, mappedStudents);
-              if (remoteData.matches) {
-                setMatches(remoteData.matches);
-                saveJSON(MATCHES_KEY, remoteData.matches);
-              }
-              if (remoteData.seasonList) {
-                setSeasonList(remoteData.seasonList);
               }
             }
           } catch (err) {
-            console.warn("Failed fetching student roster from school scriptUrl:", err);
+            console.warn("Failed to retrieve matching school scriptUrl for student:", err);
           }
-        }
 
-        if (activeStudents.length === 0) {
-          const isGuest = cleanedSchool.toLowerCase() === "guest" || cleanedSchool === "꿈나무 초등학교";
-          activeStudents = loadJSON<Student[]>(STUDENTS_KEY, isGuest ? SEED_STUDENTS : []);
-        }
+          let activeStudents = students;
+          if (schoolScriptUrl) {
+            try {
+              const res = await fetch(schoolScriptUrl);
+              const remoteData = await res.json();
+              if (remoteData.status === "success" && remoteData.students) {
+                const mappedStudents = remoteData.students.map((s: any) => ({
+                  ...s,
+                  clubName: s.clubName || "",
+                  authCode: s.authCode || "1234",
+                  gender: s.gender === "F" ? "F" : "M",
+                  level: s.level || "초심",
+                  placementGamesPlayed: s.placementGamesPlayed ? Number(s.placementGamesPlayed) : 0,
+                  hiddenMMR: s.hiddenMMR ? Number(s.hiddenMMR) : 1000,
+                  rp: s.rp ? Number(s.rp) : 1000,
+                }));
+                activeStudents = mappedStudents;
+                setStudents(mappedStudents);
+                saveJSON(STUDENTS_KEY, mappedStudents);
+                if (remoteData.matches) {
+                  setMatches(remoteData.matches);
+                  saveJSON(MATCHES_KEY, remoteData.matches);
+                }
+                if (remoteData.seasonList) {
+                  setSeasonList(remoteData.seasonList);
+                }
+              }
+            } catch (err) {
+              console.warn("Failed fetching student roster from school scriptUrl:", err);
+            }
+          }
 
-        // Get currently active opMode (either state or cached fallback)
-        const currentOpMode = localStorage.getItem(OP_MODE_KEY) || opMode;
+          if (activeStudents.length === 0) {
+            const isGuest = cleanedSchool.toLowerCase() === "guest" || cleanedSchool === "꿈나무 초등학교";
+            activeStudents = loadJSON<Student[]>(STUDENTS_KEY, isGuest ? SEED_STUDENTS : []);
+          }
 
-        const matchStudent = activeStudents.find((s) => 
-          s.name === cleanedCode && 
-          (currentOpMode === "club" || (
-            (studentGrade === undefined || s.grade === studentGrade) &&
-            (studentClass === undefined || s.classNum === studentClass)
-          ))
-        );
-
-        if (matchStudent) {
-          const studentSession = {
-            loginId: "student_" + cleanedCode + "_" + matchStudent.id,
-            role: "STUDENT" as const,
-            schoolName: cleanedSchool,
-            userName: cleanedCode,
-            studentId: matchStudent.id,
-            scriptUrl: schoolScriptUrl
-          };
-          setSession(studentSession);
-          saveJSON(SESSION_KEY, studentSession);
-          return { success: true };
-        } else {
-          const msg = currentOpMode === "club"
-            ? `${cleanedSchool} 명단에 '${cleanedCode}' 선수가 존재하지 않습니다. 관리자에게 문의하세요.`
-            : `${cleanedSchool} 명단에 '${studentGrade}학년 ${studentClass}반 ${cleanedCode}' 학생이 존재하지 않습니다. 교사에게 문의하세요.`;
-          return { success: false, message: msg };
-        }
-      }
-
-      // 2. MASTER 최고 관리자 또는 TEACHER 로그인 시도 (마스터 API 통신)
-      let loginIdToUse = role === "MASTER" ? cleanedSchool : cleanedSchool;
-
-      if (role === "TEACHER") {
-        // 교사의 경우, 학교명 입력이 단축어 또는 실제 schoolName 혹은 loginId 에 해당하는지 마스터 교사 목록에서 조회하여 실제 ID 매핑
-        try {
-          let teachers = await getTeachersList();
-          const normalizeSchool = (name: string) => name.replace(/(초등학교|중학교|고등학교|초등|중등|고등|학교|초|클럽|동호회|회)$/, "").trim().toLowerCase();
-          const targetSchool = normalizeSchool(cleanedSchool);
-          let matchedTeacher = teachers.find(
-            (t: any) => 
-              normalizeSchool(t.schoolName) === targetSchool || 
-              normalizeSchool(t.loginId) === targetSchool
+          const matchStudent = activeStudents.find((s) => 
+            s.name === cleanedCode && s.authCode === (authCode || "").trim()
           );
 
-          if (!matchedTeacher) {
-            // 캐시 미스 시 강제 새로고침
-            teachers = await getTeachersList(true);
-            matchedTeacher = teachers.find(
-              (t: any) => 
-                normalizeSchool(t.schoolName) === targetSchool || 
-                normalizeSchool(t.loginId) === targetSchool
-            );
+          if (matchStudent) {
+            const studentSession = {
+              loginId: "student_" + cleanedCode + "_" + matchStudent.id,
+              role: "STUDENT" as const,
+              schoolName: cleanedSchool,
+              userName: cleanedCode,
+              studentId: matchStudent.id,
+              scriptUrl: schoolScriptUrl
+            };
+            setSession(studentSession);
+            saveJSON(SESSION_KEY, studentSession);
+            return { success: true };
+          } else {
+            return { success: false, message: `${cleanedSchool} 명단에 '${cleanedCode}' 선수(인증코드 불일치)가 존재하지 않습니다. 관리자에게 문의하세요.` };
           }
-
-          if (matchedTeacher) {
-            loginIdToUse = matchedTeacher.loginId;
-          }
-        } catch (err) {
-          console.warn("Failed to retrieve matching teacher loginId from GET_TEACHERS, using cleanedSchool directly:", err);
         }
-      }
 
-      const response = await fetch(MASTER_API_URL, {
+        let loginIdToUse = role === "MASTER" ? cleanedSchool : cleanedSchool;
+        const response = await fetch(MASTER_API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "text/plain;charset=utf-8",
@@ -500,9 +490,7 @@ export function useLeagueStore() {
             if (remoteData.status === "success") {
               const fetchedStudents = (remoteData.students || []).map((s: any) => ({
                 ...s,
-                grade: s.grade ? Number(s.grade) : 0,
-                classNum: s.classNum ? Number(s.classNum) : 0,
-                number: s.number ? Number(s.number) : 0
+                clubName: s.clubName || "", authCode: s.authCode || "1234", gender: s.gender === "F" ? "F" : "M", level: s.level || "초심", placementGamesPlayed: s.placementGamesPlayed ? Number(s.placementGamesPlayed) : 0, hiddenMMR: s.hiddenMMR ? Number(s.hiddenMMR) : 1000, rp: s.rp ? Number(s.rp) : 1000
               }));
               setStudents(fetchedStudents);
               saveJSON(STUDENTS_KEY, fetchedStudents);
@@ -634,9 +622,7 @@ export function useLeagueStore() {
                 if (remoteData.status === "success") {
                   const fetchedStudents = (remoteData.students || []).map((s: any) => ({
                     ...s,
-                    grade: s.grade ? Number(s.grade) : 0,
-                    classNum: s.classNum ? Number(s.classNum) : 0,
-                    number: s.number ? Number(s.number) : 0
+                    clubName: s.clubName || "", authCode: s.authCode || "1234", gender: s.gender === "F" ? "F" : "M", level: s.level || "초심", placementGamesPlayed: s.placementGamesPlayed ? Number(s.placementGamesPlayed) : 0, hiddenMMR: s.hiddenMMR ? Number(s.hiddenMMR) : 1000, rp: s.rp ? Number(s.rp) : 1000
                   }));
                   setStudents(fetchedStudents);
                   saveJSON(STUDENTS_KEY, fetchedStudents);
@@ -697,9 +683,7 @@ export function useLeagueStore() {
         const isGuest = cleanedSchool.toLowerCase() === "guest" || cleanedSchool === "꿈나무 초등학교";
         const activeStudents = students.length > 0 ? students : loadJSON<Student[]>(STUDENTS_KEY, isGuest ? SEED_STUDENTS : []);
         const matchStudent = activeStudents.find((s) => 
-          s.name === cleanedCode &&
-          (studentGrade === undefined || s.grade === studentGrade) &&
-          (studentClass === undefined || s.classNum === studentClass)
+          s.name === cleanedCode && s.authCode === (authCode || "").trim()
         );
         if (matchStudent) {
           const studentSession = {
@@ -961,9 +945,7 @@ export function useLeagueStore() {
               if (data.students) {
                 const mappedStudents = data.students.map((s: any) => ({
                   ...s,
-                  grade: s.grade ? Number(s.grade) : 0,
-                  classNum: s.classNum ? Number(s.classNum) : 0,
-                  number: s.number ? Number(s.number) : 0
+                  clubName: s.clubName || "", authCode: s.authCode || "1234", gender: s.gender === "F" ? "F" : "M", level: s.level || "초심", placementGamesPlayed: s.placementGamesPlayed ? Number(s.placementGamesPlayed) : 0, hiddenMMR: s.hiddenMMR ? Number(s.hiddenMMR) : 1000, rp: s.rp ? Number(s.rp) : 1000
                 }));
                 setStudents(mappedStudents);
                 saveJSON(STUDENTS_KEY, mappedStudents);
@@ -1035,15 +1017,18 @@ export function useLeagueStore() {
 
     const playerA = students.find((s) => s.id === playerAId);
     const playerB = students.find((s) => s.id === playerBId);
+    const playerA2 = playerA2Id ? students.find((s) => s.id === playerA2Id) : undefined;
+    const playerB2 = playerB2Id ? students.find((s) => s.id === playerB2Id) : undefined;
     if (!playerA || !playerB) return;
 
-    // 오늘의 날짜 구하기 (로컬 타임존 반영)
+    // Determine match discipline automatically
+    const discipline = determineDiscipline(playerA, playerB, playerA2, playerB2);
+
     const today = new Date();
     const offset = today.getTimezoneOffset();
     const localToday = new Date(today.getTime() - (offset * 60 * 1000));
     const todayYmd = localToday.toISOString().split("T")[0];
 
-    // 복식/단식 참가 플레이어 목록 빌드
     const activePlayers = [
       { id: playerAId, role: "A" as const, isA: true },
       { id: playerA2Id, role: "A2" as const, isA: true },
@@ -1051,7 +1036,6 @@ export function useLeagueStore() {
       { id: playerB2Id, role: "B2" as const, isA: false }
     ].filter((p) => p.id !== undefined && p.id !== "") as { id: string; role: "A" | "A2" | "B" | "B2"; isA: boolean }[];
 
-    // 각 참가 학생별로 개별 RP 변동 및 보너스 계산
     const playerStats = activePlayers.map((p) => {
       const student = students.find((s) => s.id === p.id);
       if (!student) return null;
@@ -1070,10 +1054,10 @@ export function useLeagueStore() {
 
       if (won) {
         if (activeBonuses.underdog && opponents.length > 0) {
-          const playerTier = getTier(student.rp, tierThresholds);
+          const playerTier = getTier(student.rp, computedThresholds, student.placementGamesPlayed);
           const playerTierRank = TIER_RANKING[playerTier] ?? 1;
           const maxOppRp = Math.max(...opponents.map((o) => o.rp));
-          const maxOppTier = getTier(maxOppRp, tierThresholds);
+          const maxOppTier = getTier(maxOppRp, computedThresholds, opponents[0].placementGamesPlayed);
           const maxOppTierRank = TIER_RANKING[maxOppTier] ?? 1;
           if (playerTierRank < maxOppTierRank) {
             underdogBonus = Math.max(0, Math.floor((maxOppRp - student.rp) * 0.1));
@@ -1117,50 +1101,72 @@ export function useLeagueStore() {
         }
       }
 
-      const delta = won 
-        ? (rpVariables.winDelta + underdogBonus + scoreDiffBonus + rivalBonus + firstWinBonus + revengeBonus)
-        : -rpVariables.loseDelta;
+      const baseDelta = won ? rpVariables.winDelta : -rpVariables.loseDelta;
+
+      // 1. Calculate MMR Change (3x during placement)
+      const isPlacement = student.placementGamesPlayed < 5;
+      const mmrMultiplier = isPlacement ? 3 : 1;
+      const mmrDelta = baseDelta * mmrMultiplier;
+      const nextMmr = Math.max(0, student.hiddenMMR + mmrDelta);
+
+      // 2. Calculate RP Change
+      let rpDelta = 0;
+      let finalRp = student.rp;
+      let nextPlacementGamesPlayed = student.placementGamesPlayed + 1;
+
+      if (isPlacement) {
+        if (nextPlacementGamesPlayed === 5) {
+          finalRp = Math.min(nextMmr, 1399); // Cap at Gold ceiling
+          rpDelta = finalRp - student.rp;
+        } else {
+          rpDelta = 0; // RP stays same during placement
+        }
+      } else {
+        if (won) {
+          rpDelta = rpVariables.winDelta + underdogBonus + scoreDiffBonus + rivalBonus + firstWinBonus + revengeBonus;
+        } else {
+          // Bronze ~ Silver 절대 평가 구간: 패배 시 RP 차감 0
+          const currentTier = getTier(student.rp, computedThresholds, student.placementGamesPlayed);
+          if (currentTier === "Bronze" || currentTier === "Silver" || student.rp < 1200) {
+            rpDelta = 0;
+          } else {
+            rpDelta = -rpVariables.loseDelta;
+          }
+        }
+        finalRp = Math.max(0, student.rp + rpDelta);
+      }
 
       return {
         id: student.id,
         role: p.role,
         isA: p.isA,
         won,
-        delta,
+        mmrDelta,
+        nextMmr,
+        rpDelta,
+        finalRp,
+        nextPlacementGamesPlayed,
         underdogBonus,
         scoreDiffBonus,
         rivalBonus,
         firstWinBonus,
         revengeBonus
       };
-    }).filter(Boolean) as {
-      id: string;
-      role: "A" | "A2" | "B" | "B2";
-      isA: boolean;
-      won: boolean;
-      delta: number;
-      underdogBonus: number;
-      scoreDiffBonus: number;
-      rivalBonus: number;
-      firstWinBonus: number;
-      revengeBonus: number;
-    }[];
+    }).filter(Boolean);
 
     const statA = playerStats.find((p) => p.role === "A");
     const statB = playerStats.find((p) => p.role === "B");
     const statA2 = playerStats.find((p) => p.role === "A2");
     const statB2 = playerStats.find((p) => p.role === "B2");
 
-    // 승리팀 중 실시간 승급 효과 감지 (복식 지원으로 여러 명 동시 승급 가능)
     const promotedPlayers = playerStats.filter((ps) => {
       if (!ps.won) return false;
       const s = students.find((st) => st.id === ps.id);
       if (!s) return false;
-      const finalRp = s.rp + ps.delta;
-      const prevTier = getTier(s.rp, tierThresholds);
-      const finalTier = getTier(finalRp, tierThresholds);
-      const prevSub = getTierSubdivision(s.rp, tierThresholds);
-      const finalSub = getTierSubdivision(finalRp, tierThresholds);
+      const prevTier = getTier(s.rp, computedThresholds, s.placementGamesPlayed);
+      const finalTier = getTier(ps.finalRp, computedThresholds, ps.nextPlacementGamesPlayed);
+      const prevSub = getTierSubdivision(s.rp, computedThresholds, s.placementGamesPlayed);
+      const finalSub = getTierSubdivision(ps.finalRp, computedThresholds, ps.nextPlacementGamesPlayed);
       
       const basePromoted = TIER_ORDER.indexOf(finalTier) < TIER_ORDER.indexOf(prevTier);
       const subPromoted = finalTier === prevTier && finalSub < prevSub;
@@ -1170,8 +1176,7 @@ export function useLeagueStore() {
     promotedPlayers.forEach((ps) => {
       const s = students.find((st) => st.id === ps.id);
       if (s) {
-        const finalRp = s.rp + ps.delta;
-        const currentLabel = getFullTierLabel(finalRp, tierThresholds);
+        const currentLabel = getFullTierLabel(ps.finalRp, computedThresholds, ps.nextPlacementGamesPlayed);
         setPromotionEvent({
           isPromoted: true,
           newTier: currentLabel,
@@ -1190,10 +1195,11 @@ export function useLeagueStore() {
       scoreB, 
       date: new Date().toISOString(),
       matchType,
-      rpDeltaA: statA?.delta,
-      rpDeltaB: statB?.delta,
-      rpDeltaA2: statA2?.delta,
-      rpDeltaB2: statB2?.delta,
+      discipline,
+      rpDeltaA: statA?.rpDelta,
+      rpDeltaB: statB?.rpDelta,
+      rpDeltaA2: statA2?.rpDelta,
+      rpDeltaB2: statB2?.rpDelta,
       underdogBonusA: statA?.underdogBonus,
       underdogBonusB: statB?.underdogBonus,
       underdogBonusA2: statA2?.underdogBonus,
@@ -1223,39 +1229,37 @@ export function useLeagueStore() {
       if (!pStat) return s;
 
       const won = pStat.won;
-      const delta = pStat.delta;
+      const finalRp = pStat.finalRp;
+      const nextMmr = pStat.nextMmr;
+      const nextPlacementGames = pStat.nextPlacementGamesPlayed;
 
       const preRp = s.rp;
-      const preTier = getTier(preRp, tierThresholds);
+      const preTier = getTier(preRp, computedThresholds, s.placementGamesPlayed);
       const preTierRank = TIER_RANKING[preTier] ?? 1;
 
-      let nextRp = preRp + delta;
       let nextShields = s.demotionShields ?? 0;
 
-      if (won) {
-        const tentativeTier = getTier(nextRp, tierThresholds);
+      if (won && nextPlacementGames >= 5) {
+        const tentativeTier = getTier(finalRp, computedThresholds, nextPlacementGames);
         const tentativeTierRank = TIER_RANKING[tentativeTier] ?? 1;
         if (tentativeTierRank > preTierRank) {
-          nextShields = 3; // 승급 시 방어막 3회 완충
+          nextShields = 3;
         }
-        nextRp = Math.max(0, nextRp);
-      } else {
-        const minThreshold = tierThresholds[preTier] ?? 0;
-        if (nextRp < minThreshold && preTier !== "Bronze") {
+      } else if (!won && nextPlacementGames >= 5) {
+        const minThreshold = computedThresholds[preTier] ?? 0;
+        if (finalRp < minThreshold && preTier !== "Bronze" && preTier !== "Silver" && preTier !== "Unranked") {
           if (nextShields >= 1) {
-            nextRp = minThreshold; // 강등 방어막 가동
             nextShields = nextShields - 1;
-          } else {
-            nextRp = Math.max(0, nextRp); // 방어막이 소진되어 강등
+            pStat.finalRp = minThreshold; // Apply shield
           }
-        } else {
-          nextRp = Math.max(0, nextRp);
         }
       }
 
       return {
         ...s,
-        rp: nextRp,
+        rp: pStat.finalRp,
+        hiddenMMR: nextMmr,
+        placementGamesPlayed: nextPlacementGames,
         wins: s.wins + (won ? 1 : 0),
         losses: s.losses + (won ? 0 : 1),
         recent: [(won ? "W" : "L") as "W" | "L", ...s.recent].slice(0, 5),
@@ -1270,13 +1274,13 @@ export function useLeagueStore() {
 
     const rpChange: Record<string, number> = {};
     playerStats.forEach((p) => {
-      rpChange[p.id] = p.delta;
+      rpChange[p.id] = p.rpDelta;
     });
 
     recordMatchToGoogleSheets(match, rpChange, students, matches);
 
     return match;
-  }, [students, matches, recordMatchToGoogleSheets, rpVariables, tierThresholds]);
+  }, [students, matches, recordMatchToGoogleSheets, rpVariables, computedThresholds]);
 
   // 경기 삭제(롤백) 및 동기화
   const deleteMatch = useCallback((matchId: string) => {
@@ -1443,7 +1447,7 @@ export function useLeagueStore() {
 
   // 새로운 명렬표 대량 업서트 및 동기화
   const upsertStudents = useCallback(
-    (rows: { grade: number; classNum: number; number: number; name: string; gender?: Gender }[]) => {
+    (rows: { clubName: string; name: string; gender: Gender; level: "A" | "B" | "C" | "D" | "초심"; authCode: string }[]) => {
       if (currentViewSeasonRef.current !== "현재 시즌") {
         toast.error("과거 시즌 기록은 수정할 수 없습니다 (읽기 전용).");
         return { added: 0, kept: 0 };
@@ -1459,16 +1463,23 @@ export function useLeagueStore() {
         const exists = byKey.get(k);
         if (exists) {
           kept++;
-          next.push({ ...exists, gender: r.gender ?? exists.gender });
+          next.push({ 
+            ...exists, 
+            gender: r.gender || exists.gender,
+            level: r.level || exists.level,
+            authCode: r.authCode || exists.authCode
+          });
         } else {
           added++;
           next.push({
             id: uid(),
-            grade: r.grade,
-            classNum: r.classNum,
-            number: r.number,
+            clubName: r.clubName,
             name: r.name,
-            gender: r.gender ?? "U",
+            gender: r.gender || "M",
+            level: r.level || "초심",
+            authCode: r.authCode || "1234",
+            placementGamesPlayed: 0,
+            hiddenMMR: 1000,
             rp: 1000,
             recent: [],
             wins: 0,
@@ -2344,9 +2355,7 @@ export function useLeagueStore() {
         if (data.students) {
           const mappedStudents = data.students.map((s: any) => ({
             ...s,
-            grade: s.grade ? Number(s.grade) : 0,
-            classNum: s.classNum ? Number(s.classNum) : 0,
-            number: s.number ? Number(s.number) : 0
+            clubName: s.clubName || "", authCode: s.authCode || "1234", gender: s.gender === "F" ? "F" : "M", level: s.level || "초심", placementGamesPlayed: s.placementGamesPlayed ? Number(s.placementGamesPlayed) : 0, hiddenMMR: s.hiddenMMR ? Number(s.hiddenMMR) : 1000, rp: s.rp ? Number(s.rp) : 1000
           }));
           setStudents(mappedStudents);
           saveJSON(STUDENTS_KEY, mappedStudents);
