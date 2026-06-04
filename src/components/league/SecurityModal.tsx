@@ -81,7 +81,7 @@ export function SecurityModal({ correctCode, onSuccess }: SecurityModalProps) {
             🔑 이중 보안 접근 통제
           </h2>
           <p className="text-sm text-muted-foreground leading-relaxed px-2">
-            교사 전용 제어 시스템 및 민감한 전적 정보를 보호하기 위해 2차 접근 코드를 입력하세요.
+            운영진 전용 제어 시스템 및 민감한 전적 정보를 보호하기 위해 2차 접근 코드를 입력하세요.
           </p>
         </div>
 
@@ -132,7 +132,7 @@ export function SecurityModal({ correctCode, onSuccess }: SecurityModalProps) {
         </form>
 
         <div className="mt-6 text-[10px] text-center text-muted-foreground border-t border-border/25 pt-4">
-          학생들의 비정상적인 리그 조작 및 성적 조회를 차단하기 위한 2단계 안전 장치입니다.
+          동호인들의 비정상적인 리그 조작 및 성적 조회를 차단하기 위한 2단계 안전 장치입니다.
         </div>
       </Card>
 

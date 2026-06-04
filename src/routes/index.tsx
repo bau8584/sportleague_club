@@ -136,7 +136,6 @@ function Index() {
         <LoginPanel
           onLogin={loginUser}
           onRegister={registerUser}
-          onRecoverPassword={recoverPassword}
           isSyncing={isSyncing}
         />
       </div>

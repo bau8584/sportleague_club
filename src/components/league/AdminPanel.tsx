@@ -20,7 +20,8 @@ import {
   Swords,
   Calendar,
   Users,
-  Settings
+  Settings,
+  Globe
 } from "lucide-react";
 import type { Gender, Student, Match, TierName } from "@/lib/league-types";
 import { useLeagueStore, type ActiveBonuses } from "@/lib/league-store";
@@ -136,8 +137,24 @@ export function AdminPanel({
 
   // 이중 보안 상태 및 자동 잠금 훅
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const { session } = useLeagueStore();
+  const { session, updateSessionSettings } = useLeagueStore();
   const isDemo = session?.loginId === "guest" || session?.schoolName?.includes("꿈나무");
+
+  // 구글 시트 연동 및 동호회 설정 상태
+  const [localClubName, setLocalClubName] = useState(() => {
+    return session?.schoolName || localStorage.getItem("bdm.clubName.v1") || "";
+  });
+  const [localScriptUrl, setLocalScriptUrl] = useState(() => {
+    return session?.scriptUrl || localStorage.getItem("bdm.scriptUrl.v1") || "";
+  });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  useEffect(() => {
+    if (session) {
+      if (session.schoolName) setLocalClubName(session.schoolName);
+      if (session.scriptUrl) setLocalScriptUrl(session.scriptUrl);
+    }
+  }, [session]);
 
   // 시즌 변경/초기화 관련 상태
   const [isSeasonChangeModalOpen, setIsSeasonChangeModalOpen] = useState(false);
@@ -687,7 +704,7 @@ export function AdminPanel({
   if (!isUnlocked && !isDemo) {
     return (
       <SecurityModal
-        correctCode={teacherAccessCode}
+        correctCode="0000"
         onSuccess={() => setIsUnlocked(true)}
       />
     );
@@ -696,6 +713,87 @@ export function AdminPanel({
   return (
     <div className="space-y-6">
       
+      {/* 0. 구글 시트 연동 및 동호회 설정 */}
+      <Card className="border border-border/60 bg-card/60 p-6 backdrop-blur shadow-xl relative overflow-hidden">
+        <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-neon-blue">
+              <Globe className="size-5" />
+              <h3 className="font-black text-lg">구글 시트 연동 및 동호회 설정</h3>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              동호회의 고유 명칭과 데이터가 저장될 구글 앱스 스크립트(GAS) Web App API 주소를 관리합니다.
+            </p>
+          </div>
+          <Button
+            onClick={async () => {
+              if (!localClubName.trim()) {
+                toast.error("동호회 이름을 입력해 주세요.");
+                return;
+              }
+              setIsSavingSettings(true);
+              try {
+                if (updateSessionSettings) {
+                  const res = await updateSessionSettings(localClubName.trim(), localScriptUrl.trim());
+                  if (res && !res.success) {
+                    toast.error(res.message);
+                  }
+                }
+              } catch (e: any) {
+                toast.error("저장 중 오류가 발생했습니다: " + e.message);
+              } finally {
+                setIsSavingSettings(false);
+              }
+            }}
+            disabled={isSavingSettings}
+            className="bg-neon-blue hover:bg-neon-blue/80 text-primary-foreground font-black px-6 h-10 transition-all active:scale-95 rounded-xl shadow-md font-sans text-xs shrink-0 self-end md:self-center cursor-pointer"
+          >
+            {isSavingSettings ? (
+              <span className="flex items-center gap-2">
+                <span className="size-3.5 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />
+                동기화 중...
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <Save className="size-4" /> 연동 정보 저장
+              </span>
+            )}
+          </Button>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Club Name Input */}
+          <div className="space-y-2 rounded-xl bg-background/30 p-5 border border-border/20">
+            <label className="text-xs font-bold text-neon-blue block uppercase tracking-wider">동호회 이름</label>
+            <Input
+              type="text"
+              value={localClubName}
+              onChange={(e) => setLocalClubName(e.target.value)}
+              placeholder="예: 에이스 배드민턴 클럽"
+              className="h-10 border-border/50 bg-background/40 hover:bg-background/60 focus:bg-background/80 transition-all font-sans text-xs"
+            />
+            <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
+              동호회의 공식 명칭입니다. 선수용 회원가입 및 로그인 화면과 쿼리 설정에 사용됩니다.
+            </p>
+          </div>
+
+          {/* Script URL Input */}
+          <div className="space-y-2 rounded-xl bg-background/30 p-5 border border-border/20">
+            <label className="text-xs font-bold text-neon-blue block uppercase tracking-wider">구글 앱스 스크립트(GAS) Web App URL</label>
+            <Input
+              type="text"
+              value={localScriptUrl}
+              onChange={(e) => setLocalScriptUrl(e.target.value)}
+              placeholder="https://script.google.com/macros/s/.../exec"
+              className="h-10 border-border/50 bg-background/40 hover:bg-background/60 focus:bg-background/80 transition-all font-mono text-xs"
+            />
+            <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
+              구글 스프레드시트와 연동하기 위해 배포된 Apps Script의 Web App Executable URL 주소입니다.
+            </p>
+          </div>
+        </div>
+      </Card>
+
       {/* 1. League Configuration: Title and Bonus Toggles (리그 환경 설정) */}
       <Card className="border border-border/60 bg-card/60 p-6 backdrop-blur shadow-xl relative overflow-hidden">
         <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
