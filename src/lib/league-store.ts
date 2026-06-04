@@ -44,6 +44,7 @@ const OP_MODE_KEY = "bdm.opMode.v1";
 
 // 마스터 DB 구글 Apps Script Web App API 주소
 const MASTER_API_URL = "https://script.google.com/macros/s/AKfycbzcu1d1T8pHvzwvcPn2qPFIg8YtCQxsspvfQ6Koa-ie6wWE9UhEvtPzurK92SVeJEMvyQ/exec";
+const CENTRAL_AUTH_URL = "https://script.google.com/macros/s/AKfycbxDTWpYJ-DBiXNeIHw8J4s1pYeim_RKexm8Qsjid3-U28xtu6Hv9_lb5W0mxTVqw8xYmg/exec";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -155,6 +156,8 @@ export function useLeagueStore() {
 
   // 3대 역할 로그인 세션 상태
   const [session, setSession] = useState<UserSession>(null);
+  const [clubs, setClubs] = useState<any[]>([]);
+  const [platformUsers, setPlatformUsers] = useState<any[]>([]);
   const [opMode, setOpMode] = useState<"school" | "club">("school");
 
   // 이중 보안 모달을 위한 선생님 비밀번호(접근 코드) 전역 관리
@@ -333,107 +336,97 @@ export function useLeagueStore() {
       try {
         if (role === "STUDENT") {
           // B-1. 학생/선수 자율 로그인 처리
-          // 1. LocalStorage 또는 상태에서 구글 시트 URL을 먼저 가져옵니다.
-          let activeScriptUrl = localStorage.getItem("bdm.scriptUrl.v1") || "";
-          const activeClubName = localStorage.getItem("bdm.clubName.v1") || "";
+          const matchStudent = platformUsers.find((s: any) => {
+            const sClub = (s.clubName || s.club || "").trim().toLowerCase();
+            const sName = (s.name || s.userName || "").trim().toLowerCase();
+            const sPin = String(s.authCode || s.pin || s.password || "").trim();
+            return sClub === cleanedSchool.toLowerCase() &&
+                   sName === cleanedCode.toLowerCase() &&
+                   sPin === (authCode || "").trim();
+          });
 
-          // 만약 schoolName이 입력되었다면, 구글 마스터 API에서 해당 동호회의 scriptUrl을 찾아냅니다.
-          if (cleanedSchool && normalizeSchool(activeClubName) !== normalizeSchool(cleanedSchool)) {
-            try {
-              const url = await getScriptUrlForClub(cleanedSchool);
-              if (url) {
-                activeScriptUrl = url;
-              }
-            } catch (e) {
-              console.warn("Failed lookup for club scriptUrl:", e);
-            }
+          if (!matchStudent) {
+            return { success: false, message: `동호회 명단에 '${cleanedCode}' 선수가 없거나 핀코드가 일치하지 않습니다.` };
           }
 
+          const club = clubs.find((c: any) => 
+            (c.clubName || c.name || "").trim().toLowerCase() === cleanedSchool.toLowerCase()
+          );
+
+          if (!club) {
+            return { success: false, message: `선택하신 동호회 '${cleanedSchool}'의 정보가 등록되어 있지 않습니다.` };
+          }
+
+          const activeScriptUrl = club.matchSheetUrl || club.scriptUrl || club.sheetUrl || club.url || "";
           if (!activeScriptUrl) {
-            return { success: false, message: "설정된 구글 시트 URL이 없습니다. 관리자 패널에서 설정 정보를 먼저 등록하거나 설정 링크로 접속해 주세요." };
+            return { success: false, message: "선택한 동호회의 구글 시트 URL이 설정되어 있지 않습니다." };
           }
 
-          // 2. 구글 시트 URL로 GET 요청을 보냅니다.
-          const res = await fetch(activeScriptUrl);
-          const remoteData = await res.json();
+          const studentSession = {
+            loginId: "student_" + cleanedCode + "_" + (matchStudent.id || matchStudent.name),
+            role: "STUDENT" as const,
+            schoolName: cleanedSchool,
+            userName: cleanedCode,
+            studentId: matchStudent.id || matchStudent.name,
+            scriptUrl: activeScriptUrl
+          };
+          setSession(studentSession);
+          saveJSON(SESSION_KEY, studentSession);
+          
+          localStorage.setItem("bdm.clubName.v1", cleanedSchool);
+          localStorage.setItem("bdm.scriptUrl.v1", activeScriptUrl);
 
-          if (remoteData.status === "success" && remoteData.students) {
-            const mappedStudents = remoteData.students.map((s: any) => ({
-              ...s,
-              clubName: s.clubName || cleanedSchool || activeClubName || "동호회",
-              authCode: s.authCode || "1234",
-              gender: s.gender === "F" ? "F" : "M",
-              level: s.level || "초심",
-              placementGamesPlayed: s.placementGamesPlayed ? Number(s.placementGamesPlayed) : 0,
-              hiddenMMR: s.hiddenMMR ? Number(s.hiddenMMR) : 1000,
-              rp: s.rp ? Number(s.rp) : 1000,
-            }));
+          // 구글 시트에서 명단/경기 데이터 동기화
+          try {
+            const res = await fetch(activeScriptUrl);
+            const remoteData = await res.json();
+            if (remoteData.status === "success" && remoteData.students) {
+              const mappedStudents = remoteData.students.map((s: any) => ({
+                ...s,
+                clubName: s.clubName || cleanedSchool,
+                authCode: s.authCode || "1234",
+                gender: s.gender === "F" ? "F" : "M",
+                level: s.level || "초심",
+                placementGamesPlayed: s.placementGamesPlayed ? Number(s.placementGamesPlayed) : 0,
+                hiddenMMR: s.hiddenMMR ? Number(s.hiddenMMR) : 1000,
+                rp: s.rp ? Number(s.rp) : 1000,
+              }));
 
-            setStudents(mappedStudents);
-            saveJSON(STUDENTS_KEY, mappedStudents);
+              setStudents(mappedStudents);
+              saveJSON(STUDENTS_KEY, mappedStudents);
 
-            if (remoteData.matches) {
-              setMatches(remoteData.matches);
-              saveJSON(MATCHES_KEY, remoteData.matches);
+              if (remoteData.matches) {
+                setMatches(remoteData.matches);
+                saveJSON(MATCHES_KEY, remoteData.matches);
+              }
+              if (remoteData.seasonList) {
+                setSeasonList(remoteData.seasonList);
+              }
             }
-            if (remoteData.seasonList) {
-              setSeasonList(remoteData.seasonList);
-            }
-
-            // 3. 일치하는 회원 정보가 있는지 검증
-            const matchStudent = mappedStudents.find((s: any) => 
-              s.name === cleanedCode && s.authCode === (authCode || "").trim()
-            );
-
-            if (matchStudent) {
-              const studentSession = {
-                loginId: "student_" + cleanedCode + "_" + matchStudent.id,
-                role: "STUDENT" as const,
-                schoolName: cleanedSchool || activeClubName || matchStudent.clubName || "동호회",
-                userName: cleanedCode,
-                studentId: matchStudent.id,
-                scriptUrl: activeScriptUrl
-              };
-              setSession(studentSession);
-              saveJSON(SESSION_KEY, studentSession);
-              
-              // LocalStorage에 동호회 이름 및 URL 업데이트
-              localStorage.setItem("bdm.clubName.v1", cleanedSchool || activeClubName || matchStudent.clubName);
-              localStorage.setItem("bdm.scriptUrl.v1", activeScriptUrl);
-
-              return { success: true };
-            } else {
-              return { success: false, message: `동호회 명단에 '${cleanedCode}' 선수가 없거나 핀코드가 일치하지 않습니다.` };
-            }
-          } else {
-            return { success: false, message: "구글 시트 연동 데이터를 가져오는 데 실패했습니다." };
+          } catch (e) {
+            console.warn("Failed lookup for club scriptUrl on student login:", e);
           }
+          return { success: true };
         }
 
         if (role === "TEACHER") {
-          // B-2. 운영진 로그인 처리 (마스터 비밀번호 0000 검증)
-          if (cleanedCode !== "0000") {
-            return { success: false, message: "관리자 인증코드가 일치하지 않습니다. ('0000' 입력 필요)" };
+          // B-2. 운영진 로그인 처리
+          const club = clubs.find((c: any) => 
+            (c.clubName || c.name || "").trim().toLowerCase() === cleanedSchool.toLowerCase()
+          );
+
+          if (!club) {
+            return { success: false, message: `선택하신 동호회 '${cleanedSchool}'의 정보가 등록되어 있지 않습니다.` };
           }
 
-          // 1. Get the scriptUrl (either from local storage if clubName matches, or from master list)
-          let schoolScriptUrl = localStorage.getItem("bdm.scriptUrl.v1") || "";
-          const cachedClub = localStorage.getItem("bdm.clubName.v1") || "";
-          
-          if (normalizeSchool(cachedClub) !== normalizeSchool(cleanedSchool) || !schoolScriptUrl) {
-            try {
-              const list = await getTeachersList();
-              const matched = list.find(
-                (t: any) => 
-                  normalizeSchool(t.schoolName) === normalizeSchool(cleanedSchool) || 
-                  normalizeSchool(t.loginId) === normalizeSchool(cleanedSchool)
-              );
-              if (matched && matched.scriptUrl) {
-                schoolScriptUrl = matched.scriptUrl;
-              }
-            } catch (e) {
-              console.warn("Failed lookup for teacher login scriptUrl:", e);
-            }
+          const clubPassword = String(club.password || club.adminPassword || club.adminPw || "").trim();
+          if (cleanedCode !== clubPassword) {
+            return { success: false, message: "관리자 인증코드(비밀번호)가 일치하지 않습니다." };
+          }
+
+          const activeScriptUrl = club.matchSheetUrl || club.scriptUrl || club.sheetUrl || club.url || "";
+          if (!activeScriptUrl) {
+            return { success: false, message: "동호회의 매치 시트 URL이 설정되어 있지 않습니다." };
           }
 
           const teacherSession = {
@@ -441,46 +434,43 @@ export function useLeagueStore() {
             role: "TEACHER" as const,
             schoolName: cleanedSchool,
             userName: "운영진",
-            scriptUrl: schoolScriptUrl
+            scriptUrl: activeScriptUrl
           };
           
           setSession(teacherSession);
           saveJSON(SESSION_KEY, teacherSession);
-          setTeacherAccessCode("0000");
-          localStorage.setItem("bdm.teacherAccessCode.v1", "0000");
-          
-          // Save the configured club and script url to local storage for persistence
+          setTeacherAccessCode(cleanedCode);
+          localStorage.setItem("bdm.teacherAccessCode.v1", cleanedCode);
           localStorage.setItem("bdm.clubName.v1", cleanedSchool);
-          if (schoolScriptUrl) {
-            localStorage.setItem("bdm.scriptUrl.v1", schoolScriptUrl);
-          }
+          localStorage.setItem("bdm.scriptUrl.v1", activeScriptUrl);
 
-          // Fetch students and matches if scriptUrl exists
-          if (schoolScriptUrl) {
-            try {
-              const remoteRes = await fetch(schoolScriptUrl);
-              const remoteData = await remoteRes.json();
-              if (remoteData.status === "success") {
-                const fetchedStudents = (remoteData.students || []).map((s: any) => ({
-                  ...s,
-                  clubName: s.clubName || cleanedSchool,
-                  authCode: s.authCode || "1234",
-                  gender: s.gender === "F" ? "F" : "M",
-                  level: s.level || "초심",
-                  placementGamesPlayed: s.placementGamesPlayed ? Number(s.placementGamesPlayed) : 0,
-                  hiddenMMR: s.hiddenMMR ? Number(s.hiddenMMR) : 1000,
-                  rp: s.rp ? Number(s.rp) : 1000
-                }));
-                setStudents(fetchedStudents);
-                saveJSON(STUDENTS_KEY, fetchedStudents);
-                
-                const fetchedMatches = remoteData.matches || [];
-                setMatches(fetchedMatches);
-                saveJSON(MATCHES_KEY, fetchedMatches);
+          // 구글 시트에서 명단/경기 데이터 동기화
+          try {
+            const remoteRes = await fetch(activeScriptUrl);
+            const remoteData = await remoteRes.json();
+            if (remoteData.status === "success") {
+              const fetchedStudents = (remoteData.students || []).map((s: any) => ({
+                ...s,
+                clubName: s.clubName || cleanedSchool,
+                authCode: s.authCode || "1234",
+                gender: s.gender === "F" ? "F" : "M",
+                level: s.level || "초심",
+                placementGamesPlayed: s.placementGamesPlayed ? Number(s.placementGamesPlayed) : 0,
+                hiddenMMR: s.hiddenMMR ? Number(s.hiddenMMR) : 1000,
+                rp: s.rp ? Number(s.rp) : 1000
+              }));
+              setStudents(fetchedStudents);
+              saveJSON(STUDENTS_KEY, fetchedStudents);
+              
+              const fetchedMatches = remoteData.matches || [];
+              setMatches(fetchedMatches);
+              saveJSON(MATCHES_KEY, fetchedMatches);
+              if (remoteData.seasonList) {
+                setSeasonList(remoteData.seasonList);
               }
-            } catch (err) {
-              console.warn("Failed fetching students on bypass login:", err);
             }
+          } catch (err) {
+            console.warn("Failed fetching students on admin login:", err);
           }
           return { success: true };
         }
@@ -521,7 +511,7 @@ export function useLeagueStore() {
         setIsSyncing(false);
       }
     },
-    []
+    [clubs, platformUsers]
   );
 
   // 3. 신규 회원가입 수행 함수 (학생/회원 자율 가입)
@@ -535,20 +525,13 @@ export function useLeagueStore() {
   }) => {
     setIsSyncing(true);
     try {
-      // 1. Get scriptUrl for the club
-      const schoolScriptUrl = await getScriptUrlForClub(details.clubName);
-      if (!schoolScriptUrl) {
-        return { success: false, message: `'${details.clubName}' 클럽의 구글 시트 연동 URL이 설정되어 있지 않습니다. 관리자 패널에서 연동 정보를 먼저 설정하세요.` };
-      }
-
-      // 2. POST to the scriptUrl with action "REGISTER_STUDENT"
-      const response = await fetch(schoolScriptUrl, {
+      const response = await fetch(CENTRAL_AUTH_URL, {
         method: "POST",
         headers: {
           "Content-Type": "text/plain;charset=utf-8",
         },
         body: JSON.stringify({
-          action: "REGISTER_STUDENT",
+          action: "SIGN_UP",
           name: details.name,
           gender: details.gender,
           authCode: details.authCode,

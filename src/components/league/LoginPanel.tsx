@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useLeagueStore } from "@/lib/league-store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,23 @@ export function LoginPanel({
   }) => Promise<{ success: boolean; message?: string }>;
   isSyncing: boolean;
 }) {
+  const { clubs, setClubs, platformUsers, setPlatformUsers } = useLeagueStore();
+
+  React.useEffect(() => {
+    const fetchPlatformData = async () => {
+      try {
+        const res = await fetch("https://script.google.com/macros/s/AKfycbxDTWpYJ-DBiXNeIHw8J4s1pYeim_RKexm8Qsjid3-U28xtu6Hv9_lb5W0mxTVqw8xYmg/exec");
+        const data = await res.json();
+        if (data.status === "success" || data.clubs) {
+          if (data.clubs) setClubs(data.clubs);
+          if (data.users) setPlatformUsers(data.users);
+        }
+      } catch (error) {
+        console.error("Failed to fetch platform data:", error);
+      }
+    };
+    fetchPlatformData();
+  }, [setClubs, setPlatformUsers]);
   const [activeTab, setActiveTab] = useState<"TEACHER" | "STUDENT">("STUDENT");
   const [isMasterMode, setIsMasterMode] = useState(false);
   const [isSignUpMode, setIsSignUpMode] = useState(false);
@@ -285,18 +303,23 @@ export function LoginPanel({
             
             /* B. MEMBER SIGN UP FORM */
             <div className="space-y-3.5 animate-in fade-in duration-300">
-              {/* Sign Up Club Name (Prefilled or Empty) */}
+              {/* Sign Up Club Name (Dropdown select box) */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-foreground flex items-center gap-1">
-                  <Building2 className="size-3.5 text-neon-blue" /> 소속 동호회 이름
+                  <Building2 className="size-3.5 text-neon-blue" /> 소속 클럽 선택
                 </Label>
-                <Input
+                <select
                   required
                   value={signUpClubName}
                   onChange={(e) => setSignUpClubName(e.target.value)}
-                  placeholder="동호회 이름을 입력하세요 (예: 에이스 배드민턴 클럽)"
-                  className="h-10 border-border/60 bg-background/40 focus:border-neon-blue transition-all"
-                />
+                  className="flex h-10 w-full rounded-md border border-border/60 bg-background/40 px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neon-blue transition-all"
+                >
+                  <option value="">가입할 클럽을 선택하세요</option>
+                  {clubs.map((club: any) => {
+                    const name = club.clubName || club.name || "";
+                    return <option key={name} value={name}>{name}</option>;
+                  })}
+                </select>
               </div>
 
               {/* Sign Up Name */}
@@ -388,72 +411,47 @@ export function LoginPanel({
             
             /* C. STANDARD LOGIN FORM */
             <div className="space-y-4 animate-in fade-in duration-300">
-              {/* Display Cached Club Name Badge if available, or ask for input */}
-              {cachedClubName ? (
-                <div className="flex items-center gap-1.5 text-xs font-extrabold text-neon-blue bg-neon-blue/10 border border-neon-blue/20 px-3 py-1.5 rounded-lg w-fit mx-auto mb-4 animate-in zoom-in-95 duration-300">
-                  <Globe className="size-3.5" /> 📍 {cachedClubName}
-                </div>
-              ) : (
-                <div className="space-y-1.5 animate-in fade-in duration-200">
-                  <Label className="text-xs font-bold text-foreground">클럽 이름</Label>
-                  <Input
-                    required
-                    value={activeTab === "TEACHER" ? adminClubName : loginClubInput}
-                    onChange={(e) => {
-                      if (activeTab === "TEACHER") {
-                        setAdminClubName(e.target.value);
-                      } else {
-                        setLoginClubInput(e.target.value);
-                      }
-                    }}
-                    placeholder="동호회 이름을 입력하세요"
-                    className="h-10 border-border/60 bg-background/40 hover:border-neon-blue/60 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all"
-                  />
-                </div>
-              )}
+              {/* 소속 클럽 선택 */}
+              <div className="space-y-1.5 animate-in fade-in duration-200">
+                <Label className="text-xs font-bold text-foreground flex items-center gap-1">
+                  <Building2 className="size-3.5 text-neon-blue" /> 소속 클럽 선택
+                </Label>
+                <select
+                  required
+                  value={activeTab === "TEACHER" ? adminClubName : loginClubInput}
+                  onChange={(e) => {
+                    if (activeTab === "TEACHER") {
+                      setAdminClubName(e.target.value);
+                    } else {
+                      setLoginClubInput(e.target.value);
+                    }
+                  }}
+                  className="flex h-10 w-full rounded-md border border-border/60 bg-background/40 px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neon-blue transition-all"
+                >
+                  <option value="">클럽을 선택하세요</option>
+                  {clubs.map((club: any) => {
+                    const name = club.clubName || club.name || "";
+                    return <option key={name} value={name}>{name}</option>;
+                  })}
+                </select>
+              </div>
 
               {activeTab === "TEACHER" ? (
                 /* TEACHER/ADMIN LOGIN FIELDS */
-                <div className="space-y-1.5 animate-in fade-in duration-200">
-                  {cachedClubName && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-foreground">클럽 명칭 확인 (수정 가능)</Label>
-                      <Input
-                        required
-                        value={adminClubName}
-                        onChange={(e) => setAdminClubName(e.target.value)}
-                        placeholder="동호회 이름"
-                        className="h-10 border-border/60 bg-background/40 focus:border-neon-blue transition-all"
-                      />
-                    </div>
-                  )}
-                  <div className="space-y-1.5 pt-2">
-                    <Label className="text-xs font-bold text-foreground">운영진 인증코드</Label>
-                    <Input
-                      required
-                      type="password"
-                      value={adminPasscode}
-                      onChange={(e) => setAdminPasscode(e.target.value)}
-                      placeholder="운영진 인증코드를 입력하세요 (예: 0000)"
-                      className="h-10 border-border/60 bg-background/40 hover:border-neon-blue/60 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all"
-                    />
-                  </div>
+                <div className="space-y-1.5 animate-in fade-in duration-200 pt-2">
+                  <Label className="text-xs font-bold text-foreground">운영진 인증코드 (비밀번호)</Label>
+                  <Input
+                    required
+                    type="password"
+                    value={adminPasscode}
+                    onChange={(e) => setAdminPasscode(e.target.value)}
+                    placeholder="비밀번호를 입력하세요"
+                    className="h-10 border-border/60 bg-background/40 hover:border-neon-blue/60 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all text-center text-sm font-bold"
+                  />
                 </div>
               ) : (
                 /* STUDENT/PLAYER LOGIN FIELDS */
                 <div className="space-y-3.5 animate-in fade-in duration-200">
-                  {cachedClubName && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-foreground">클럽 명칭 확인 (수정 가능)</Label>
-                      <Input
-                        required
-                        value={loginClubInput}
-                        onChange={(e) => setLoginClubInput(e.target.value)}
-                        placeholder="동호회 이름"
-                        className="h-10 border-border/60 bg-background/40 focus:border-neon-blue transition-all"
-                      />
-                    </div>
-                  )}
                   <div className="space-y-1.5">
                     <Label className="text-xs font-bold text-foreground">선수 이름</Label>
                     <Input
@@ -492,7 +490,7 @@ export function LoginPanel({
               )}
             </div>
           )}
-
+          
           {/* Form Action Submit Button */}
           <Button
             type="submit"

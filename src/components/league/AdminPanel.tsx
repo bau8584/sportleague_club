@@ -21,7 +21,7 @@ import {
   Calendar,
   Users,
   Settings,
-  Globe
+  Globe, Building2
 } from "lucide-react";
 import type { Gender, Student, Match, TierName } from "@/lib/league-types";
 import { useLeagueStore, type ActiveBonuses } from "@/lib/league-store";
@@ -148,6 +148,14 @@ export function AdminPanel({
     return session?.scriptUrl || localStorage.getItem("bdm.scriptUrl.v1") || "";
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // 신규 클럽 개설 폼 상태
+  const [newClubName, setNewClubName] = useState("");
+  const [newJoinCode, setNewJoinCode] = useState("");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [newMatchSheetUrl, setNewMatchSheetUrl] = useState("");
+  const [isCreatingClub, setIsCreatingClub] = useState(false);
+
 
   useEffect(() => {
     if (session) {
@@ -700,18 +708,128 @@ export function AdminPanel({
     }
   };
 
-  // 보안 잠금 가드 렌더링
-  if (!isUnlocked && !isDemo) {
-    return (
-      <SecurityModal
-        correctCode="0000"
-        onSuccess={() => setIsUnlocked(true)}
-      />
-    );
-  }
+
 
   return (
     <div className="space-y-6">
+      {/* 신규 클럽 개설 폼 */}
+      <Card className="border border-border/60 bg-card/60 p-6 backdrop-blur shadow-xl relative overflow-hidden">
+        <div className="mb-6">
+          <div className="flex items-center gap-2 text-neon-blue">
+            <Building2 className="size-5" />
+            <h3 className="font-black text-lg">🏸 신규 클럽 개설 (SaaS 플랫폼)</h3>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            새로운 배드민턴 클럽을 개설하고 연동할 구글 스프레드시트 URL을 설정합니다.
+          </p>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Club Name */}
+          <div className="space-y-2 rounded-xl bg-background/30 p-5 border border-border/20">
+            <label className="text-xs font-bold text-neon-blue block uppercase tracking-wider">클럽 이름</label>
+            <Input
+              type="text"
+              required
+              value={newClubName}
+              onChange={(e) => setNewClubName(e.target.value)}
+              placeholder="예: 강남 배드민턴 동호회"
+              className="h-10 border-border/50 bg-background/40 hover:bg-background/60 focus:bg-background/80 transition-all font-sans text-xs"
+            />
+          </div>
+
+          {/* Join Code */}
+          <div className="space-y-2 rounded-xl bg-background/30 p-5 border border-border/20">
+            <label className="text-xs font-bold text-neon-blue block uppercase tracking-wider">클럽 가입 인증 코드 (joinCode)</label>
+            <Input
+              type="text"
+              required
+              value={newJoinCode}
+              onChange={(e) => setNewJoinCode(e.target.value)}
+              placeholder="회원가입 시 사용할 코드 입력"
+              className="h-10 border-border/50 bg-background/40 hover:bg-background/60 focus:bg-background/80 transition-all font-sans text-xs"
+            />
+          </div>
+
+          {/* Admin Password */}
+          <div className="space-y-2 rounded-xl bg-background/30 p-5 border border-border/20">
+            <label className="text-xs font-bold text-neon-blue block uppercase tracking-wider">관리자 비밀번호</label>
+            <Input
+              type="password"
+              required
+              value={newAdminPassword}
+              onChange={(e) => setNewAdminPassword(e.target.value)}
+              placeholder="운영진 로그인 비밀번호"
+              className="h-10 border-border/50 bg-background/40 hover:bg-background/60 focus:bg-background/80 transition-all font-sans text-xs"
+            />
+          </div>
+
+          {/* Match Sheet URL */}
+          <div className="space-y-2 rounded-xl bg-background/30 p-5 border border-border/20">
+            <label className="text-xs font-bold text-neon-blue block uppercase tracking-wider">매치 기록용 구글 시트 URL (GAS URL)</label>
+            <Input
+              type="text"
+              required
+              value={newMatchSheetUrl}
+              onChange={(e) => setNewMatchSheetUrl(e.target.value)}
+              placeholder="https://script.google.com/macros/s/.../exec"
+              className="h-10 border-border/50 bg-background/40 hover:bg-background/60 focus:bg-background/80 transition-all font-mono text-xs"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <Button
+            onClick={async () => {
+              if (!newClubName.trim() || !newJoinCode.trim() || !newAdminPassword.trim() || !newMatchSheetUrl.trim()) {
+                toast.error("모든 필드를 정확히 채워 주세요.");
+                return;
+              }
+              setIsCreatingClub(true);
+              toast.loading("신규 클럽 등록 요청 중...", { id: "create-club-loading" });
+              try {
+                const res = await fetch("https://script.google.com/macros/s/AKfycbxDTWpYJ-DBiXNeIHw8J4s1pYeim_RKexm8Qsjid3-U28xtu6Hv9_lb5W0mxTVqw8xYmg/exec", {
+                  method: "POST",
+                  headers: { "Content-Type": "text/plain;charset=utf-8" },
+                  body: JSON.stringify({
+                    action: "CREATE_CLUB",
+                    clubName: newClubName.trim(),
+                    joinCode: newJoinCode.trim(),
+                    adminPassword: newAdminPassword.trim(),
+                    matchSheetUrl: newMatchSheetUrl.trim()
+                  })
+                });
+                const data = await res.json();
+                toast.dismiss("create-club-loading");
+
+                if (data.status === "success") {
+                  toast.success(`🎉 ${newClubName} 클럽 개설 완료!`);
+                  // 로컬 스토리지에 관리자 세션으로 즉시 설정 및 동기화
+                  if (updateSessionSettings) {
+                    await updateSessionSettings(newClubName.trim(), newMatchSheetUrl.trim());
+                  }
+                  // 입력 폼 리셋
+                  setNewClubName("");
+                  setNewJoinCode("");
+                  setNewAdminPassword("");
+                  setNewMatchSheetUrl("");
+                } else {
+                  toast.error(data.message || "클럽 개설에 실패했습니다.");
+                }
+              } catch (e: any) {
+                toast.dismiss("create-club-loading");
+                toast.error("클럽 개설 중 서버 통신 오류가 발생했습니다: " + e.message);
+              } finally {
+                setIsCreatingClub(false);
+              }
+            }}
+            disabled={isCreatingClub}
+            className="w-full md:w-auto bg-neon-blue hover:bg-neon-blue/80 text-primary-foreground font-black px-8 h-11 transition-all active:scale-95 rounded-xl shadow-md font-sans text-xs shrink-0 cursor-pointer"
+          >
+            {isCreatingClub ? "클럽 개설 등록 중..." : "🏸 신규 클럽 개설하기"}
+          </Button>
+        </div>
+      </Card>
       
       {/* 0. 구글 시트 연동 및 동호회 설정 */}
       <Card className="border border-border/60 bg-card/60 p-6 backdrop-blur shadow-xl relative overflow-hidden">
